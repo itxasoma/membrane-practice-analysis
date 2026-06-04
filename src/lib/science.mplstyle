@@ -8,7 +8,8 @@ axes.prop_cycle : cycler('color', ['0C5DA5', '00B945', 'FF9500', 'FF2C00', '845B
 
 # Set default figure size
 # figure.figsize : 3.5, 2.625
-figure.figsize : 5.25, 3.9372
+# figure.figsize : 5.25, 3.9372
+figure.figsize : 5., 3.6372
 
 # Set marker
 lines.marker : o                

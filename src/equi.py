@@ -55,6 +55,7 @@ def save_temperature(t, temp, temp_avg):
     ax.set_xlabel(r'Time (ns)')
     ax.set_ylabel(r'Temperature (K)')
     ax.legend(loc='best')
+    fig.tight_layout()
 
     out = os.path.join(FIG_DIR, '0.temperature.pdf')
     fig.savefig(out, dpi=150)
@@ -65,12 +66,13 @@ def save_temperature(t, temp, temp_avg):
 def save_pressure(t, press, press_avg):
     fig, ax = plt.subplots()
     ax.plot(t, press, marker='.', label=r'$P$')
-    ax.plot(t, press_avg, label=r'$P_{\mathrm{avg}}$')
+    ax.plot(t, press_avg, marker='.', label=r'$P_{\mathrm{avg}}$')
     ax.axhline(1.01325, color='red', linestyle='--',
                label=r'$P_{\mathrm{target}} = 1.01325\ \mathrm{bar}$')
     ax.set_xlabel(r'Time (ns)')
     ax.set_ylabel(r'Pressure (bar)')
     ax.legend(loc='best')
+    fig.tight_layout()
 
     out = os.path.join(FIG_DIR, '0.pressure.pdf')
     fig.savefig(out, dpi=150)
@@ -84,6 +86,7 @@ def save_volume(t, volume):
     ax.set_xlabel(r'Time (ns)')
     ax.set_ylabel(r'Volume ($\mathrm{A}^3$)')
     ax.legend(loc='best')
+    fig.tight_layout()
 
     out = os.path.join(FIG_DIR, '0.volume.pdf')
     fig.savefig(out, dpi=150)
@@ -99,7 +102,8 @@ def save_energies(t, kinetic, total, potential):
     ax.set_xlabel(r'Time (ns)')
     ax.set_ylabel(r'Energy (kcal/mol)')
     ax.legend(loc='best')
-
+    fig.tight_layout()
+    
     out = os.path.join(FIG_DIR, '0.energies.pdf')
     fig.savefig(out, dpi=150)
     plt.close(fig)
@@ -112,6 +116,7 @@ def save_total_energy(t, total):
     ax.set_xlabel(r'Time (ns)')
     ax.set_ylabel(r'Total energy (kcal/mol)')
     ax.legend(loc='best')
+    fig.tight_layout()
 
     out = os.path.join(FIG_DIR, '0.total_energy.pdf')
     fig.savefig(out, dpi=150)
@@ -127,6 +132,7 @@ def save_bonded(t, bond, angle, dihed):
     ax.set_xlabel(r'Time (ns)')
     ax.set_ylabel(r'Energy (kcal/mol)')
     ax.legend(loc='best')
+    fig.tight_layout()
 
     out = os.path.join(FIG_DIR, '0.bonded.pdf')
     fig.savefig(out, dpi=150)
