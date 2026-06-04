@@ -9,7 +9,7 @@ is adapted from:
 
 The idea: compute a running mean and running std from the simulation data itself
 (the "null" distribution of expected fluctuations), then check whether the
-target value (T_TARGET or P_TARGET) falls inside the 1σ / 2σ bands.
+target value (T_TARGET or P_TARGET) falls inside the 1sigma / 2sigma bands.
 A target z-score |z| < 1 means the target is well within normal fluctuations.
 
 Color conventions (matching science.mplstyle cycle):
@@ -109,7 +109,7 @@ def _zscore_ylim(x, n_sigma=3.5):
     """
     Tighter y-limits for z-score plots: centre on the final running mean
     and show ± n_sigma * final_sigma, so the bands fill the plot nicely
-    without the ±2σ region dominating when early transients are large.
+    without the ±2sigma region dominating when early transients are large.
     """
     mu, sigma = running_stats(x)
     # Use the second-half stats to avoid early-transient inflation
@@ -193,7 +193,7 @@ def save_pressure(t, press, press_avg, ylim):
 def save_pressure_zscore(t, press, ylim):
     """
     Thermalized-band plot for P (no instantaneous points).
-    y-axis clipped to ±3.5σ of the stable second half so the bands
+    y-axis clipped to ±3.5sigma of the stable second half so the bands
     are visible and the legend is not buried.
     Ref: Muñoz-Aldalur, BirthMonth.ipynb (2025).
     """
@@ -285,7 +285,7 @@ def save_bonded(t, bond, angle, dihed):
 # ── Summary ───────────────────────────────────────────────────────────────────
 
 def save_summary(data):
-    out = os.path.join(FIG_DIR, 'equilibration_summary.dat')
+    out = os.path.join(FIG_DIR, '0.equilibration_summary.dat')
     arr = np.column_stack([
         data['TIME_NS'], data['TEMP'], data['PRESSURE'], data['VOLUME'],
         data['KINETIC'], data['POTENTIAL'], data['TOTAL']
