@@ -31,14 +31,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FIG_DIR  = os.path.join(BASE_DIR, '../figures')
 LOG_FILE = os.path.join(BASE_DIR, '../0_Simulation/Equilibrat_NPT/npt.log')
 
-style_candidates = [
-    os.path.join(BASE_DIR, 'lib/science.mplstyle'),
-    os.path.join(BASE_DIR, '../mplstyle/science.mplstyle'),
-]
-for style_file in style_candidates:
-    if os.path.exists(style_file):
-        plt.style.use(style_file)
-        break
+plt.style.use('lib/science.mplstyle')
 
 os.makedirs(FIG_DIR, exist_ok=True)
 

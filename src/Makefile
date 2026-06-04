@@ -18,3 +18,8 @@ prod:
 corr:
 	mkdir -p ../figures
 	$(PYTHON) corr.py
+
+# Other interesting functions (like MSD):
+stats:
+	mkdir -p ../figures
+	$(PYTHON) stats.py
