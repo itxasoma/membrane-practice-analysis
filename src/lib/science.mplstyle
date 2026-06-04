@@ -12,7 +12,7 @@ figure.figsize : 5.25, 3.9372
 
 # Set marker
 lines.marker : o                
-lines.markersize : 2  
+lines.markersize : 4  
 
 # Set x axis
 xtick.direction : in

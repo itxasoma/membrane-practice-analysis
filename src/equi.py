@@ -48,13 +48,15 @@ def load_log(filename):
 def save_temperature(t, temp, temp_avg):
     fig, ax = plt.subplots()
     ax.plot(t, temp, marker='.', label=r'$T$')
-    ax.axhline(temp_avg[-1], color='red', linestyle='--',
+    ax.axhline(temp_avg[-1], color='red', linestyle='--', 
                label=rf'$T_{{\mathrm{{avg,final}}}} = {temp_avg[-1]:.2f}\ \mathrm{{K}}$')
+    ax.axhline(209.5, color='orange', linestyle='--', 
+               label=rf'$T_{{\mathrm{{avg,target}}}} = 209.5\ \mathrm{{K}}$')
     ax.set_xlabel(r'Time (ns)')
     ax.set_ylabel(r'Temperature (K)')
     ax.legend(loc='best')
 
-    out = os.path.join(FIG_DIR, 'Temperature.pdf')
+    out = os.path.join(FIG_DIR, '0.temperature.pdf')
     fig.savefig(out, dpi=150)
     plt.close(fig)
     print(f'Saved {os.path.relpath(out)}')
@@ -70,7 +72,7 @@ def save_pressure(t, press, press_avg):
     ax.set_ylabel(r'Pressure (bar)')
     ax.legend(loc='best')
 
-    out = os.path.join(FIG_DIR, 'Pressure.pdf')
+    out = os.path.join(FIG_DIR, '0.pressure.pdf')
     fig.savefig(out, dpi=150)
     plt.close(fig)
     print(f'Saved {os.path.relpath(out)}')
@@ -83,7 +85,7 @@ def save_volume(t, volume):
     ax.set_ylabel(r'Volume ($\mathrm{A}^3$)')
     ax.legend(loc='best')
 
-    out = os.path.join(FIG_DIR, 'Volume.pdf')
+    out = os.path.join(FIG_DIR, '0.volume.pdf')
     fig.savefig(out, dpi=150)
     plt.close(fig)
     print(f'Saved {os.path.relpath(out)}')
@@ -98,7 +100,7 @@ def save_energies(t, kinetic, total, potential):
     ax.set_ylabel(r'Energy (kcal/mol)')
     ax.legend(loc='best')
 
-    out = os.path.join(FIG_DIR, 'Energies.pdf')
+    out = os.path.join(FIG_DIR, '0.energies.pdf')
     fig.savefig(out, dpi=150)
     plt.close(fig)
     print(f'Saved {os.path.relpath(out)}')
@@ -111,7 +113,7 @@ def save_total_energy(t, total):
     ax.set_ylabel(r'Total energy (kcal/mol)')
     ax.legend(loc='best')
 
-    out = os.path.join(FIG_DIR, 'TotalEnergy.pdf')
+    out = os.path.join(FIG_DIR, '0.total_energy.pdf')
     fig.savefig(out, dpi=150)
     plt.close(fig)
     print(f'Saved {os.path.relpath(out)}')
@@ -126,7 +128,7 @@ def save_bonded(t, bond, angle, dihed):
     ax.set_ylabel(r'Energy (kcal/mol)')
     ax.legend(loc='best')
 
-    out = os.path.join(FIG_DIR, 'Bonded.pdf')
+    out = os.path.join(FIG_DIR, '0.bonded.pdf')
     fig.savefig(out, dpi=150)
     plt.close(fig)
     print(f'Saved {os.path.relpath(out)}')

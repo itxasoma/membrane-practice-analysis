@@ -2,3 +2,5 @@
 NVT.dcd 
 
 .DS_Store*
+
+.venv/
