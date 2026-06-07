@@ -29,14 +29,14 @@ import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FIG_DIR  = os.path.join(BASE_DIR, '../figures')
-LOG_FILE = os.path.join(BASE_DIR, '../0_Simulation/Equilibrat_NPT/npt.log')
+LOG_FILE = os.path.join(BASE_DIR, '../0_Simulation/Equilibrat_NPT/168019/npt.log')
 
 plt.style.use('lib/science.mplstyle')
 
 os.makedirs(FIG_DIR, exist_ok=True)
 
-# Edit to match your simulation targets
-T_TARGET = 209.5    # K
+# Edit to match simulation targets
+T_TARGET = 290.5    # K
 P_TARGET = 1.01325  # bar
 
 # Base colors per variable
@@ -80,7 +80,7 @@ def load_log(filename):
 def running_stats(x):
     """
     Cumulative running mean and std.
-    The band narrows as more data accumulates, as in BirthMonth.ipynb.
+    The band narrows as more data accumulates.
     """
     n       = np.arange(1, len(x) + 1, dtype=float)
     cumsum  = np.cumsum(x)
@@ -105,7 +105,7 @@ def _zscore_ylim(x, n_sigma=3.5):
     without the ±2sigma region dominating when early transients are large.
     """
     mu, sigma = running_stats(x)
-    # Use the second-half stats to avoid early-transient inflation
+    # Use the second half stats to avoid early transient inflation
     half = len(x) // 2
     mu_stable    = np.mean(x[half:])
     sigma_stable = np.std(x[half:])

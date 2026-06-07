@@ -1,314 +1,247 @@
 #!/usr/bin/env python3
+"""
+corr.py — Dipolar rotational autocorrelation function C_rot(t) for water
+          molecules in the hydration shell of a DMPC membrane.
+
+Definition (Informe_practica, eq. 1):
+
+    C_rot(t) = < mu_hat(t0+t) · mu_hat(t0) >
+               --------------------------------
+                 < mu_hat(t0) · mu_hat(t0) >
+
+where mu_hat(t) is the unit dipole vector of a water molecule at time t,
+defined as the direction bisecting the H–O–H angle:
+
+    mu(t) = r_O(t) - 0.5 * (r_H1(t) + r_H2(t))
+    mu_hat(t) = mu(t) / |mu(t)|
+
+The double average is over:
+  1. All water molecules in the selected shell (9–15 Å from any lipid atom)
+  2. All t_0 starting times (valid because the system is at equilibrium)
+
+Input:  trajectory.xyz  (produced by trajectory_to_xyz.py)
+Output: figures/2.corr.pdf
+        figures/2.corr.csv   (t_ps, C_rot columns)
+
+Color conventions (matching science.mplstyle cycle):
+  C_rot : violet  #845B97  (same as T — a rotational/thermal quantity)
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 import os
 
 
 BASE_DIR  = os.path.dirname(os.path.abspath(__file__))
 FIG_DIR   = os.path.join(BASE_DIR, '../figures')
-DATA_FILE = os.path.join(BASE_DIR, '../1_Analysis/trajectory.xyz')
+TRAJ_FILE = os.path.join(BASE_DIR, '../1_Analysis/trajectory.xyz')
 
-style_candidates = [
-    os.path.join(BASE_DIR, 'lib/science.mplstyle'),
-    os.path.join(BASE_DIR, '../mplstyle/science.mplstyle'),
-]
-for style_file in style_candidates:
-    if os.path.exists(style_file):
-        plt.style.use(style_file)
-        break
+plt.style.use('lib/science.mplstyle')
 
 os.makedirs(FIG_DIR, exist_ok=True)
 
-OXYGEN_LABEL = 'OH2'
-DT_PS = 20.0
-MAX_DT = 500
-N_SLICES = 5
+# Timestep between consecutive frames in the trajectory (ps).
+# DCDfreq=10 and timestep=2fs → one frame every 10×2 fs = 20 fs = 0.02 ps.
+DT_PS = 0.02
 
+C_CORR = '#845B97'   # violet
+
+
+def darken(hex_color, factor=0.55):
+    r, g, b = mcolors.to_rgb(hex_color)
+    return (r * factor, g * factor, b * factor)
+
+
+# ── XYZ reader ────────────────────────────────────────────────────────────────
 
 def read_xyz(filename):
-    frames = []
+    """
+    Parse trajectory.xyz produced by trajectory_to_xyz.py.
 
+    Returns
+    -------
+    frames : list of dicts  {atom_name: list_of_positions}
+             Each frame is a dict mapping atom name (e.g. 'OH2', 'H1', 'H2')
+             to an (N, 3) array of positions in Å.
+             Because the number of selected waters can vary between frames,
+             we store per-residue dipole vectors separately (see below).
+    """
+    frames = []
     with open(filename) as f:
         while True:
-            nline = f.readline()
-            if not nline:
+            line = f.readline()
+            if not line:
                 break
+            n_atoms = int(line.strip())
+            _ = f.readline()  # frame header
 
-            try:
-                n = int(nline.strip())
-            except ValueError:
-                continue
-
-            f.readline()
-            coords = []
-
-            for _ in range(n):
-                p = f.readline().split()
-                if len(p) >= 4 and p[0] == OXYGEN_LABEL:
-                    coords.append([float(p[1]), float(p[2]), float(p[3])])
-
-            if coords:
-                frames.append(np.array(coords, dtype=float))
-            else:
-                frames.append(np.empty((0, 3), dtype=float))
-
+            atoms = []
+            for _ in range(n_atoms):
+                parts = f.readline().split()
+                name = parts[0]
+                xyz  = np.array([float(parts[1]),
+                                  float(parts[2]),
+                                  float(parts[3])])
+                atoms.append((name, xyz))
+            frames.append(atoms)
     return frames
 
 
-def average_snapshot_correlation(frames, max_dt):
-    non_empty = [f for f in frames if len(f) > 0]
-    min_n = min((len(f) for f in non_empty), default=0)
+def build_dipoles(frames):
+    """
+    For each frame, group atoms into TIP3P water residues (O + 2 H) and
+    compute the unit dipole vector for each water.
 
-    if min_n == 0:
-        return np.array([]), np.array([])
+    TIP3P atom names in CHARMM: OH2 (oxygen), H1, H2.
+    The dipole direction bisects H–O–H:
 
-    dtv, cv = [], []
+        mu = r_O - 0.5*(r_H1 + r_H2)
 
-    for dt in range(0, min(max_dt, len(frames) - 1) + 1):
-        num_vals = []
-        den_vals = []
+    Returns
+    -------
+    dipoles : list of (N_waters, 3) arrays, one per frame.
+              N_waters can differ between frames because the shell
+              selection is distance-based.
+    """
+    dipoles = []
+    for atoms in frames:
+        # Collect into residues: consecutive triplets OH2, H1, H2
+        frame_dipoles = []
+        i = 0
+        while i < len(atoms) - 2:
+            name0, r0 = atoms[i]
+            name1, r1 = atoms[i+1]
+            name2, r2 = atoms[i+2]
 
-        for t0 in range(len(frames) - dt):
-            n = min(len(frames[t0]), len(frames[t0 + dt]), min_n)
-            if n == 0:
-                continue
+            # Accept any ordering that contains one O and two H
+            group = {name0: r0, name1: r1, name2: r2}
+            o_keys = [k for k in group if k.upper() in ('OH2', 'O')]
+            h_keys = [k for k in group if k.upper() in ('H1', 'H2', 'H')]
 
-            r0 = frames[t0][:n]
-            r1 = frames[t0 + dt][:n]
+            if len(o_keys) == 1 and len(h_keys) == 2:
+                r_O  = group[o_keys[0]]
+                r_H1 = group[h_keys[0]]
+                r_H2 = group[h_keys[1]]
+                mu   = r_O - 0.5 * (r_H1 + r_H2)
+                norm = np.linalg.norm(mu)
+                if norm > 1e-10:
+                    frame_dipoles.append(mu / norm)
+                i += 3
+            else:
+                i += 1  # skip misaligned atom, try next
 
-            num_vals.extend(np.sum(r0 * r1, axis=1))
-            den_vals.extend(np.sum(r0 * r0, axis=1))
+        if frame_dipoles:
+            dipoles.append(np.array(frame_dipoles))   # shape (N_w, 3)
+        else:
+            dipoles.append(np.zeros((0, 3)))
 
-        if num_vals and den_vals:
-            dtv.append(dt * DT_PS)
-            cv.append(np.mean(num_vals) / np.mean(den_vals))
-
-    return np.array(dtv), np.array(cv)
-
-
-def msd(frames, max_dt):
-    non_empty = [f for f in frames if len(f) > 0]
-    min_n = min((len(f) for f in non_empty), default=0)
-
-    if min_n == 0:
-        return np.array([]), np.array([]), np.array([])
-
-    dtv, yv, ev = [], [], []
-
-    for dt in range(1, min(max_dt, len(frames) - 1) + 1):
-        vals = []
-
-        for t0 in range(len(frames) - dt):
-            n = min(len(frames[t0]), len(frames[t0 + dt]), min_n)
-            if n == 0:
-                continue
-
-            d = frames[t0 + dt][:n] - frames[t0][:n]
-            vals.append(np.sum(d * d, axis=1))
-
-        if vals:
-            vals = np.concatenate(vals)
-            dtv.append(dt * DT_PS)
-            yv.append(vals.mean())
-            ev.append(vals.std() / np.sqrt(len(vals)))
-
-    return np.array(dtv), np.array(yv), np.array(ev)
+    return dipoles
 
 
-def vacf(frames, max_dt):
-    non_empty = [f for f in frames if len(f) > 0]
-    min_n = min((len(f) for f in non_empty), default=0)
+# ── Correlation function ──────────────────────────────────────────────────────
 
-    if min_n == 0 or len(frames) < 3:
-        return np.array([]), np.array([])
+def compute_crot(dipoles, max_lag=None):
+    """
+    Compute C_rot(t) averaged over all molecules and all t_0.
 
-    vels = []
-    for t in range(1, len(frames) - 1):
-        n = min(len(frames[t - 1]), len(frames[t + 1]), min_n)
-        if n == 0:
+    For each lag dt (in frames):
+        C_rot(dt) = mean over all t0 of:
+                    mean over molecules present in BOTH t0 and t0+dt of:
+                    mu_hat(t0+dt) · mu_hat(t0)
+
+    Only molecules that appear in both frames contribute (the number of
+    waters in the shell can fluctuate slightly between frames).
+
+    Parameters
+    ----------
+    dipoles  : list of (N_i, 3) arrays
+    max_lag  : int, maximum lag in frames (default: half the trajectory)
+
+    Returns
+    -------
+    t_ps   : (max_lag,) array   — lag times in ps
+    C_rot  : (max_lag,) array   — correlation values, C_rot(0) = 1
+    """
+    n_frames = len(dipoles)
+    if max_lag is None:
+        max_lag = n_frames // 2
+
+    C_rot = np.zeros(max_lag)
+    counts = np.zeros(max_lag, dtype=int)
+
+    for t0 in range(n_frames - 1):
+        d0 = dipoles[t0]           # (N0, 3)
+        if d0.shape[0] == 0:
             continue
-        vels.append((frames[t + 1][:n] - frames[t - 1][:n]) / (2 * DT_PS))
+        n0 = d0.shape[0]
 
-    if not vels:
-        return np.array([]), np.array([])
-
-    c0 = np.mean(np.concatenate([np.sum(v * v, axis=1) for v in vels]))
-
-    dtv, yv = [], []
-    for dt in range(0, min(max_dt, len(vels) - 1) + 1):
-        vals = []
-
-        for i in range(len(vels) - dt):
-            n = min(len(vels[i]), len(vels[i + dt]))
-            vals.extend(np.sum(vels[i][:n] * vels[i + dt][:n], axis=1))
-
-        if vals:
-            dtv.append(dt * DT_PS)
-            yv.append(np.mean(vals) / c0)
-
-    return np.array(dtv), np.array(yv)
-
-
-def per_slice_msd(frames, max_dt, n_slices):
-    non_empty = [f for f in frames if len(f) > 0]
-    if not non_empty:
-        return np.array([]), np.empty((n_slices, 0)), np.array([])
-
-    allz = np.concatenate([f[:, 2] for f in non_empty])
-    edges = np.linspace(allz.min(), allz.max(), n_slices + 1)
-
-    min_n = min(len(x) for x in non_empty)
-    n_dt = min(max_dt, len(frames) - 1)
-    mat = np.full((n_slices, n_dt), np.nan)
-
-    for dt in range(1, n_dt + 1):
-        bucket = [[] for _ in range(n_slices)]
-
-        for t0 in range(len(frames) - dt):
-            n = min(len(frames[t0]), len(frames[t0 + dt]), min_n)
-            if n == 0:
+        for dt in range(1, min(max_lag, n_frames - t0)):
+            d1 = dipoles[t0 + dt]  # (N1, 3)
+            if d1.shape[0] == 0:
                 continue
 
-            z0 = frames[t0][:n, 2]
-            sid = np.clip(np.digitize(z0, edges) - 1, 0, n_slices - 1)
+            # Use the minimum number of molecules present in both frames
+            n_common = min(n0, d1.shape[0])
+            dot = np.sum(d0[:n_common] * d1[:n_common], axis=1)  # (n_common,)
+            C_rot[dt]  += dot.mean()
+            counts[dt] += 1
 
-            d = frames[t0 + dt][:n] - frames[t0][:n]
-            d2 = np.sum(d * d, axis=1)
+    # Normalise by number of t0 origins; set C_rot(0) = 1 by definition
+    mask = counts > 0
+    C_rot[mask] /= counts[mask]
+    C_rot[0] = 1.0
 
-            for s in range(n_slices):
-                m = sid == s
-                if np.any(m):
-                    bucket[s].append(np.mean(d2[m]))
-
-        for s in range(n_slices):
-            if bucket[s]:
-                mat[s, dt - 1] = np.mean(bucket[s])
-
-    return np.arange(1, n_dt + 1) * DT_PS, mat, edges
+    t_ps = np.arange(max_lag) * DT_PS
+    return t_ps, C_rot
 
 
-def save_curve(x, y, title, ylabel, outfile, yerr=None, hline=None, hline_label=None):
-    if len(x) == 0:
-        print(f'Skipping {os.path.basename(outfile)}: no data found')
-        return
+# ── Plot & save ───────────────────────────────────────────────────────────────
 
+def save_crot(t_ps, C_rot):
     fig, ax = plt.subplots()
-
-    if yerr is not None and len(yerr):
-        ax.fill_between(x, y - yerr, y + yerr, alpha=0.2)
-
-    ax.plot(x, y, marker='.', label=title)
-
-    if hline is not None:
-        ax.axhline(hline, color='red', linestyle='--', label=hline_label)
-
-    ax.set_xlabel(r'Lag time (ps)')
-    ax.set_ylabel(ylabel)
+    ax.plot(t_ps, C_rot, color=C_CORR,
+            label=r'$C^{\rm rot}_{\rm sim}(t)$')
+    ax.axhline(0, color='black', linewidth=0.6, linestyle=':')
+    ax.set_xlabel(r'$t$ (ps)')
+    ax.set_ylabel(r'$C^{\rm rot}_{\rm sim}(t)$')
+    ax.set_ylim(-0.05, 1.05)
     ax.legend(loc='best')
-    fig.savefig(outfile, dpi=150)
+    fig.tight_layout()
+    out = os.path.join(FIG_DIR, '2.corr.pdf')
+    fig.savefig(out, dpi=150)
     plt.close(fig)
-    print(f'Saved {os.path.relpath(outfile)}')
+    print(f'Saved {os.path.relpath(out)}')
 
 
-def save_slice_plot(x, mat, edges, outfile):
-    if len(x) == 0 or mat.size == 0 or len(edges) == 0:
-        print(f'Skipping {os.path.basename(outfile)}: no slice data found')
-        return
+def save_csv(t_ps, C_rot):
+    out = os.path.join(FIG_DIR, '2.corr.csv')
+    np.savetxt(out,
+               np.column_stack([t_ps, C_rot]),
+               header='t_ps C_rot',
+               comments='# ')
+    print(f'Saved {os.path.relpath(out)}')
 
-    fig, ax = plt.subplots()
 
-    for i in range(mat.shape[0]):
-        m = ~np.isnan(mat[i])
-        if np.any(m):
-            ax.plot(
-                x[m],
-                mat[i, m],
-                marker='.',
-                label=rf'${edges[i]:.1f} < z < {edges[i+1]:.1f}$'
-            )
-
-    ax.set_xlabel(r'Lag time (ps)')
-    ax.set_ylabel(r'MSD ($\mathrm{A}^2$)')
-    ax.legend(loc='best')
-    fig.savefig(outfile, dpi=150)
-    plt.close(fig)
-    print(f'Saved {os.path.relpath(outfile)}')
-
+# ── Main ──────────────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
-    print(f'Reading: {DATA_FILE}')
-    frames = read_xyz(DATA_FILE)
-    print(f'Found {len(frames)} frames')
+    print(f'Reading: {TRAJ_FILE}')
+    frames  = read_xyz(TRAJ_FILE)
+    print(f'  {len(frames)} frames loaded')
 
-    n_oxy = [len(f) for f in frames if len(f) > 0]
-    if n_oxy:
-        print(f'Found {len(n_oxy)} frames with {OXYGEN_LABEL} atoms; mean count = {np.mean(n_oxy):.1f}')
-    else:
-        print(f'Warning: no atoms with label {OXYGEN_LABEL} were found')
+    print('Building dipole vectors...')
+    dipoles = build_dipoles(frames)
+    n_waters = [d.shape[0] for d in dipoles if d.shape[0] > 0]
+    print(f'  Waters per frame: min={min(n_waters)}  '
+          f'mean={np.mean(n_waters):.0f}  max={max(n_waters)}')
 
-    xc, yc = average_snapshot_correlation(frames, MAX_DT)
-    if len(xc):
-        np.savetxt(
-            os.path.join(FIG_DIR, 'corr.csv'),
-            np.c_[xc, yc],
-            delimiter=',',
-            header='dt_ps,C_snapshot',
-            comments=''
-        )
-    save_curve(
-        xc, yc,
-        r'Snapshot correlation',
-        r'$C(\Delta t)$',
-        os.path.join(FIG_DIR, 'corr.pdf'),
-        hline=0.0,
-        hline_label=r'$0$'
-    )
+    print('Computing C_rot(t)...')
+    t_ps, C_rot = compute_crot(dipoles)
+    print(f'  Max lag: {t_ps[-1]:.2f} ps  ({len(t_ps)} points)')
+    print(f'  C_rot at t=0:       {C_rot[0]:.4f}  (should be 1.0)')
+    print(f'  C_rot at t_max/2:   {C_rot[len(C_rot)//2]:.4f}')
+    print(f'  C_rot at t_max:     {C_rot[-1]:.4f}')
 
-    x, y, e = msd(frames, MAX_DT)
-    if len(x):
-        np.savetxt(
-            os.path.join(FIG_DIR, 'msd.csv'),
-            np.c_[x, y, e],
-            delimiter=',',
-            header='dt_ps,MSD_A2,SEM',
-            comments=''
-        )
-    save_curve(
-        x, y,
-        r'MSD',
-        r'MSD ($\mathrm{A}^2$)',
-        os.path.join(FIG_DIR, 'msd.pdf'),
-        yerr=e
-    )
-
-    xv, yv = vacf(frames, MAX_DT)
-    if len(xv):
-        np.savetxt(
-            os.path.join(FIG_DIR, 'vacf.csv'),
-            np.c_[xv, yv],
-            delimiter=',',
-            header='dt_ps,VACF',
-            comments=''
-        )
-    save_curve(
-        xv, yv,
-        r'VACF',
-        r'VACF($\Delta t$)',
-        os.path.join(FIG_DIR, 'vacf.pdf'),
-        hline=0.0,
-        hline_label=r'$0$'
-    )
-
-    xs, mat, edges = per_slice_msd(frames, MAX_DT, N_SLICES)
-    if len(xs):
-        np.savetxt(
-            os.path.join(FIG_DIR, 'msd_per_slice.csv'),
-            np.column_stack([xs] + [mat[i] for i in range(mat.shape[0])]),
-            delimiter=','
-        )
-    save_slice_plot(
-        xs, mat, edges,
-        os.path.join(FIG_DIR, 'msd_per_slice.pdf')
-    )
-
-    print('Done.')
+    save_crot(t_ps, C_rot)
+    save_csv(t_ps, C_rot)

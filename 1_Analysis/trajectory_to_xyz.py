@@ -3,8 +3,8 @@ from MDAnalysis.analysis.distances import distance_array
 
 
 u = mda.Universe(
-    "../0_Simulation/Equilibrat_NPT/estructura_membranaDMPC.psf",
-    "../0_Simulation/Produccio_NVT/NVT.dcd"
+    "../0_Simulation/Equilibrat_NPT/167834/estructura_membranaDMPC.psf",
+    "../0_Simulation/Produccio_NVT/original/NVT.dcd"
 )
 
 lipid = u.select_atoms("resname DMPC")
