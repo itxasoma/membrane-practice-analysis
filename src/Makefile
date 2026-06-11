@@ -19,6 +19,10 @@ corr:
 	mkdir -p ../figures
 	$(PYTHON) corr.py
 
+corr-plots:
+	mkdir -p ../figures
+	$(PYTHON) corr-plots.py
+
 # Other interesting functions (like MSD):
 stats:
 	mkdir -p ../figures

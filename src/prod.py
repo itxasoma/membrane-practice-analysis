@@ -27,14 +27,14 @@ import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FIG_DIR  = os.path.join(BASE_DIR, '../figures')
-LOG_FILE = os.path.join(BASE_DIR, '../0_Simulation/Produccio_NVT/original+10points/nvt.log')
+LOG_FILE = os.path.join(BASE_DIR, '../0_Simulation/Produccio_NVT/Vctt/nvt.log')
 
 plt.style.use('lib/science.mplstyle')
 
 os.makedirs(FIG_DIR, exist_ok=True)
 
 # Edit to match your simulation targets
-T_TARGET = 209.5    # K
+T_TARGET = 290.5    # K
 V_TARGET = None     # Å³ — set to e.g. 251210.9 to draw a target line (read from TS=0)
 
 # Base colors
@@ -43,6 +43,8 @@ C_ETOT = '#00B945'  # green  — total energy
 C_UPOT = '#FF9500'  # yellow — potential
 C_T    = '#845B97'  # violet — temperature
 C_V    = '#474747'  # gray   — volume
+C_P    = '#FF2C00'  # red    — pressure   
+P_TARGET = 1.01325  # bar                 
 
 COLUMNS = [
     'TS', 'BOND', 'ANGLE', 'DIHED', 'IMPRP',
@@ -123,7 +125,7 @@ def save_energies(t, kinetic, total, potential):
     ax.set_ylabel(r'Energy (kcal/mol)')
     ax.legend(loc='best')
     fig.tight_layout()
-    out = os.path.join(FIG_DIR, '1.energies.pdf')
+    out = os.path.join(FIG_DIR, '1.energies_Vctt.pdf')
     fig.savefig(out, dpi=150)
     plt.close(fig)
     print(f'Saved {os.path.relpath(out)}')
@@ -147,7 +149,7 @@ def save_temperature(t, temp, temp_avg, ylim):
     ax.set_ylim(ylim)
     ax.legend(loc='best')
     fig.tight_layout()
-    out = os.path.join(FIG_DIR, '1.temperature.pdf')
+    out = os.path.join(FIG_DIR, '1.temperature_Vctt.pdf')
     #fig.savefig(out, dpi=150)
     #plt.close(fig)
     print(f'Saved {os.path.relpath(out)}')
@@ -176,7 +178,7 @@ def save_temperature_zscore(t, temp, ylim):
     ax.set_ylim(ylim)
     ax.legend(loc='best')
     fig.tight_layout()
-    out = os.path.join(FIG_DIR, '1.temperature-zscore.pdf')
+    out = os.path.join(FIG_DIR, '1.temperature-zscore_Vctt.pdf')
     fig.savefig(out, dpi=150)
     plt.close(fig)
     z_final = (mu[-1] - T_TARGET) / sigma[-1] if sigma[-1] > 0 else float('nan')
@@ -202,7 +204,7 @@ def save_volume(t, volume, ylim, v_target):
     ax.set_ylim(ylim)
     ax.legend(loc='best')
     fig.tight_layout()
-    out = os.path.join(FIG_DIR, '1.volume.pdf')
+    out = os.path.join(FIG_DIR, '1.volume_Vctt.pdf')
     #fig.savefig(out, dpi=150)
     #plt.close(fig)
     print(f'Saved {os.path.relpath(out)}')
@@ -233,10 +235,61 @@ def save_volume_zscore(t, volume, ylim, v_target):
     ax.set_ylim(ylim)
     ax.legend(loc='best')
     fig.tight_layout()
-    out = os.path.join(FIG_DIR, '1.volume-zscore.pdf')
+    out = os.path.join(FIG_DIR, '1.volume-zscore_Vctt.pdf')
     fig.savefig(out, dpi=150)
     plt.close(fig)
     print(f'Saved {os.path.relpath(out)}')
+
+# ── Pressure ─────────────────────────────────────────────────────────────────
+
+def save_pressure(t, press, press_avg, ylim):
+    fig, ax = plt.subplots()
+    ax.plot(t, press, marker='.', color=C_P, label=r'$P$')
+    ax.plot(t, press_avg, color=darken(C_P), linewidth=1.2, linestyle='--',
+            label=r'$P_{\mathrm{avg}}$')
+    ax.axhline(P_TARGET, color='black', linewidth=0.8, linestyle=':',
+               label=r'$P_{\mathrm{target}} = 1.01325\ \mathrm{bar}$')
+    ax.set_xlabel(r'Time (ns)')
+    ax.set_ylabel(r'Pressure (bar)')
+    ax.set_ylim(ylim)
+    ax.legend(loc='best')
+    fig.tight_layout()
+    out = os.path.join(FIG_DIR, '0.pressure_Vctt.pdf')
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    print(f'Saved {os.path.relpath(out)}')
+
+
+def save_pressure_zscore(t, press, ylim):
+    """
+    Thermalized-band plot for P (no instantaneous points).
+    y-axis clipped to ±3.5sigma of the stable second half so the bands
+    are visible and the legend is not buried.
+    Ref: Muñoz-Aldalur, BirthMonth.ipynb (2025).
+    """
+    mu, sigma = running_stats(press)
+
+    fig, ax = plt.subplots()
+
+    ax.fill_between(t, mu - 2*sigma, mu + 2*sigma,
+                    color=C_P, alpha=0.15, label=r'$\pm 2\sigma$ ($\sim$95\%)')
+    ax.fill_between(t, mu - sigma, mu + sigma,
+                    color=C_P, alpha=0.40, label=r'$\pm 1\sigma$ ($\sim$68\%)')
+    ax.plot(t, mu, color=darken(C_P), linewidth=1.4, linestyle='--',
+            label=r'running mean $\langle P \rangle$')
+    ax.axhline(P_TARGET, color='black', linewidth=0.8, linestyle=':',
+               label=rf'$P_{{\rm target}} = {P_TARGET:.3f}\ \mathrm{{bar}}$')
+
+    ax.set_xlabel(r'Time (ps)')
+    ax.set_ylabel(r'Pressure (bar)')
+    ax.set_ylim(ylim)
+    ax.legend(loc='best')
+    fig.tight_layout()
+    out = os.path.join(FIG_DIR, '1.pressure-zscore_Vctt.pdf')
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    z_final = (mu[-1] - P_TARGET) / sigma[-1] if sigma[-1] > 0 else float('nan')
+    print(f'Saved {os.path.relpath(out)}  (final z = {z_final:.3f})')
 
 
 # ── Summary ───────────────────────────────────────────────────────────────────
@@ -273,12 +326,14 @@ if __name__ == '__main__':
     # Z-score plots: tighter range centred on stable second-half stats
     ylim_T_z = _zscore_ylim(data['TEMP'],   n_sigma=3.5)
     ylim_V_z = _zscore_ylim(data['VOLUME'], n_sigma=3.5)
+    ylim_P_z = _zscore_ylim(data['PRESSURE'], n_sigma=3.5)  
 
     save_energies(t, data['KINETIC'], data['TOTAL'], data['POTENTIAL'])
     save_temperature(t, data['TEMP'], data['TEMPAVG'], ylim_T_raw)
     save_temperature_zscore(t, data['TEMP'], ylim_T_z)
     save_volume(t, data['VOLUME'], ylim_V_raw, v_target)
     save_volume_zscore(t, data['VOLUME'], ylim_V_z, v_target)
+    save_pressure_zscore(t, data['PRESSURE'], ylim_P_z)
     save_summary(data)
 
     half = len(t) // 2

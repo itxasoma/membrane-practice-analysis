@@ -6,219 +6,221 @@ corr.py — Dipolar rotational autocorrelation function C_rot(t) for water
 Definition (Informe_practica, eq. 1):
 
     C_rot(t) = < mu_hat(t0+t) · mu_hat(t0) >
-               --------------------------------
-                 < mu_hat(t0) · mu_hat(t0) >
 
-where mu_hat(t) is the unit dipole vector of a water molecule at time t,
-defined as the direction bisecting the H–O–H angle:
+where mu_hat is a unit vector (denominator = 1 always), and the average is:
+  1. Over all water molecules present in BOTH frames t0 and t0+dt
+  2. Over all t0 starting times using CIRCULAR (periodic) time averaging,
+     so every lag dt has the same number of t0 origins → equal error bars.
 
-    mu(t) = r_O(t) - 0.5 * (r_H1(t) + r_H2(t))
-    mu_hat(t) = mu(t) / |mu(t)|
+Molecule tracking:
+  - Waters are identified by their index in the XYZ file (stable across frames
+    because trajectory_to_xyz.py writes them in consistent MDAnalysis order).
+  - For each pair (t0, t0+dt mod N), only molecules present in both frames
+    contribute. The intersection is taken by index.
 
-The double average is over:
-  1. All water molecules in the selected shell (9–15 Å from any lipid atom)
-  2. All t_0 starting times (valid because the system is at equilibrium)
+Two estimates per shell:
+  1. Full average  — circular average over all t0, all common molecules
+  2. Last-frame    — only the last frame as t0 (single-origin, noisier;
+                     useful to check that the final config is representative)
 
-Input:  trajectory.xyz  (produced by trajectory_to_xyz.py)
-Output: figures/2.corr.pdf
-        figures/2.corr.csv   (t_ps, C_rot columns)
+Input:  1_Analysis/trajectory_d*.xyz  (produced by trajectory_to_xyz.py)
+Output: figures/2.corr_<tag>.csv           — per-shell full-average data
+        figures/2.corr_lastframe_<tag>.csv — per-shell last-frame data
 
-Color conventions (matching science.mplstyle cycle):
-  C_rot : violet  #845B97  (same as T — a rotational/thermal quantity)
+Run corr-plots.py afterwards to generate all PDF figures from the CSVs.
 """
 
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
 import os
 
-
-BASE_DIR  = os.path.dirname(os.path.abspath(__file__))
-FIG_DIR   = os.path.join(BASE_DIR, '../figures')
-TRAJ_FILE = os.path.join(BASE_DIR, '../1_Analysis/trajectory.xyz')
-
-plt.style.use('lib/science.mplstyle')
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+FIG_DIR  = os.path.join(BASE_DIR, '../figures')
+ANA_DIR  = os.path.join(BASE_DIR, '../1_Analysis')
 
 os.makedirs(FIG_DIR, exist_ok=True)
 
-# Timestep between consecutive frames in the trajectory (ps).
+# Timestep between consecutive frames (ps).
 # DCDfreq=10 and timestep=2fs → one frame every 10×2 fs = 20 fs = 0.02 ps.
 DT_PS = 0.02
 
-C_CORR = '#845B97'   # violet
+# Read every STRIDE-th frame.
+# STRIDE=1: full resolution (0.02 ps). Recommended — the fast librational
+# decay happens in the first ~0.5 ps and needs fine sampling.
+STRIDE = 1
+
+# Compute C_rot only up to MAX_LAG_PS picoseconds.
+MAX_LAG_PS = 10.0
+
+# Shell definitions: (filename, label, color)
+SHELLS = [
+    ('trajectory_d0_3.xyz',   r'$0$-$3\,\AA$',   '#E87D72'),   # red
+    ('trajectory_d3_5.xyz',   r'$3$-$5\,\AA$',   '#F0A500'),   # orange
+    ('trajectory_d5_10.xyz',  r'$5$-$10\,\AA$',  '#845B97'),   # violet
+    ('trajectory_d10_15.xyz', r'$10$-$15\,\AA$', '#56A0D3'),   # blue
+]
 
 
-def darken(hex_color, factor=0.55):
-    r, g, b = mcolors.to_rgb(hex_color)
-    return (r * factor, g * factor, b * factor)
+# ── XYZ reader (strided, float32) ─────────────────────────────────────────────
 
-
-# ── XYZ reader ────────────────────────────────────────────────────────────────
-
-def read_xyz(filename):
+def read_xyz(filename, stride=1):
     """
-    Parse trajectory.xyz produced by trajectory_to_xyz.py.
+    Parse trajectory.xyz, keeping only every `stride`-th frame.
+    Skipped frames are fast-forwarded without parsing.
+    Uses float32 to halve memory usage.
 
     Returns
     -------
-    frames : list of dicts  {atom_name: list_of_positions}
-             Each frame is a dict mapping atom name (e.g. 'OH2', 'H1', 'H2')
-             to an (N, 3) array of positions in Å.
-             Because the number of selected waters can vary between frames,
-             we store per-residue dipole vectors separately (see below).
+    frames : list of (n_atoms, 4) arrays — columns: atom_index, x, y, z
+             Each row corresponds to one atom; atom_index is its position
+             within the frame (0-based), used as a stable molecule identifier.
+    n_waters_per_frame : list of int — number of water molecules per frame
     """
     frames = []
+    frame_index = 0
     with open(filename) as f:
         while True:
             line = f.readline()
             if not line:
                 break
-            n_atoms = int(line.strip())
-            _ = f.readline()  # frame header
-
-            atoms = []
-            for _ in range(n_atoms):
-                parts = f.readline().split()
-                name = parts[0]
-                xyz  = np.array([float(parts[1]),
-                                  float(parts[2]),
-                                  float(parts[3])])
-                atoms.append((name, xyz))
-            frames.append(atoms)
+            try:
+                n_atoms = int(line.strip())
+            except ValueError:
+                break
+            f.readline()  # skip frame header
+            if frame_index % stride == 0:
+                atoms = []
+                for _ in range(n_atoms):
+                    parts = f.readline().split()
+                    atoms.append(np.array(parts[1:4], dtype=np.float32))
+                frames.append(np.stack(atoms))   # (n_atoms, 3)
+            else:
+                for _ in range(n_atoms):
+                    f.readline()
+            frame_index += 1
     return frames
 
 
+# ── Build dipoles (vectorized) ────────────────────────────────────────────────
+
 def build_dipoles(frames):
     """
-    For each frame, group atoms into TIP3P water residues (O + 2 H) and
-    compute the unit dipole vector for each water.
+    Vectorized dipole builder. Assumes strict OH2/H1/H2 ordering in triplets,
+    as produced by trajectory_to_xyz.py.
 
-    TIP3P atom names in CHARMM: OH2 (oxygen), H1, H2.
-    The dipole direction bisects H–O–H:
+    mu = r_O - 0.5*(r_H1 + r_H2)
+    mu_hat = mu / |mu|
 
-        mu = r_O - 0.5*(r_H1 + r_H2)
+    Each frame may have a different number of water molecules (n_w varies
+    because the shell is distance-based). We keep the per-frame arrays
+    separate so molecule tracking can use index-based intersection.
 
     Returns
     -------
-    dipoles : list of (N_waters, 3) arrays, one per frame.
-              N_waters can differ between frames because the shell
-              selection is distance-based.
+    dipoles : list of (n_w, 3) float32 arrays, one per frame.
+              Molecule i in frame t corresponds to molecule i in any other
+              frame (stable MDAnalysis ordering). Common molecules between
+              two frames are those with indices 0..min(n_w_t0, n_w_t1)-1.
     """
     dipoles = []
-    for atoms in frames:
-        # Collect into residues: consecutive triplets OH2, H1, H2
-        frame_dipoles = []
-        i = 0
-        while i < len(atoms) - 2:
-            name0, r0 = atoms[i]
-            name1, r1 = atoms[i+1]
-            name2, r2 = atoms[i+2]
-
-            # Accept any ordering that contains one O and two H
-            group = {name0: r0, name1: r1, name2: r2}
-            o_keys = [k for k in group if k.upper() in ('OH2', 'O')]
-            h_keys = [k for k in group if k.upper() in ('H1', 'H2', 'H')]
-
-            if len(o_keys) == 1 and len(h_keys) == 2:
-                r_O  = group[o_keys[0]]
-                r_H1 = group[h_keys[0]]
-                r_H2 = group[h_keys[1]]
-                mu   = r_O - 0.5 * (r_H1 + r_H2)
-                norm = np.linalg.norm(mu)
-                if norm > 1e-10:
-                    frame_dipoles.append(mu / norm)
-                i += 3
-            else:
-                i += 1  # skip misaligned atom, try next
-
-        if frame_dipoles:
-            dipoles.append(np.array(frame_dipoles))   # shape (N_w, 3)
-        else:
-            dipoles.append(np.zeros((0, 3)))
-
+    for coords in frames:
+        n = (len(coords) // 3) * 3
+        c = coords[:n].reshape(-1, 3, 3).astype(np.float32)  # (n_w, atom, xyz)
+        # c[:, 0] = O,  c[:, 1] = H1,  c[:, 2] = H2
+        mu = c[:, 0] - 0.5 * (c[:, 1] + c[:, 2])
+        norms = np.linalg.norm(mu, axis=1, keepdims=True)
+        dipoles.append(mu / np.where(norms > 1e-10, norms, 1.0))
     return dipoles
 
 
-# ── Correlation function ──────────────────────────────────────────────────────
+# ── C_rot: circular time average ──────────────────────────────────────────────
 
-def compute_crot(dipoles, max_lag=None):
+def compute_crot(dipoles, max_lag_frames):
     """
-    Compute C_rot(t) averaged over all molecules and all t_0.
+    Compute C_rot(t) with CIRCULAR (periodic) time averaging.
 
-    For each lag dt (in frames):
-        C_rot(dt) = mean over all t0 of:
-                    mean over molecules present in BOTH t0 and t0+dt of:
-                    mu_hat(t0+dt) · mu_hat(t0)
+    For every lag dt, all N frames are used as t0:
+        t1 = (t0 + dt) mod N
 
-    Only molecules that appear in both frames contribute (the number of
-    waters in the shell can fluctuate slightly between frames).
+    Only molecules present in BOTH frames contribute (index intersection):
+        n_common = min(n_w[t0], n_w[t1])
+        contribution = mean over molecules 0..n_common-1 of mu(t1)·mu(t0)
+
+    This gives exactly N origins for every lag dt → equal error bars for all lags.
 
     Parameters
     ----------
-    dipoles  : list of (N_i, 3) arrays
-    max_lag  : int, maximum lag in frames (default: half the trajectory)
+    dipoles        : list of (n_w_i, 3) float32 arrays
+    max_lag_frames : int, maximum lag in frames
 
     Returns
     -------
-    t_ps   : (max_lag,) array   — lag times in ps
-    C_rot  : (max_lag,) array   — correlation values, C_rot(0) = 1
+    t_ps  : (max_lag_frames+1,) array — lag times in ps
+    C_rot : (max_lag_frames+1,) array — C_rot(0) = 1
     """
-    n_frames = len(dipoles)
-    if max_lag is None:
-        max_lag = n_frames // 2
+    N = len(dipoles)
+    C_rot = np.zeros(max_lag_frames + 1)
 
-    C_rot = np.zeros(max_lag)
-    counts = np.zeros(max_lag, dtype=int)
+    for dt in range(max_lag_frames + 1):
+        acc = 0.0
+        for t0 in range(N):
+            t1 = (t0 + dt) % N
+            n_common = min(dipoles[t0].shape[0], dipoles[t1].shape[0])
+            d0 = dipoles[t0][:n_common].astype(np.float64)
+            d1 = dipoles[t1][:n_common].astype(np.float64)
+            acc += np.sum(d0 * d1, axis=1).mean()
+        C_rot[dt] = acc / N   # equal N contributions for every dt
 
-    for t0 in range(n_frames - 1):
-        d0 = dipoles[t0]           # (N0, 3)
-        if d0.shape[0] == 0:
-            continue
-        n0 = d0.shape[0]
+    C_rot /= C_rot[0]   # enforce C_rot(0) = 1
 
-        for dt in range(1, min(max_lag, n_frames - t0)):
-            d1 = dipoles[t0 + dt]  # (N1, 3)
-            if d1.shape[0] == 0:
-                continue
-
-            # Use the minimum number of molecules present in both frames
-            n_common = min(n0, d1.shape[0])
-            dot = np.sum(d0[:n_common] * d1[:n_common], axis=1)  # (n_common,)
-            C_rot[dt]  += dot.mean()
-            counts[dt] += 1
-
-    # Normalise by number of t0 origins; set C_rot(0) = 1 by definition
-    mask = counts > 0
-    C_rot[mask] /= counts[mask]
-    C_rot[0] = 1.0
-
-    t_ps = np.arange(max_lag) * DT_PS
+    dt_eff = DT_PS * STRIDE
+    t_ps   = np.arange(max_lag_frames + 1) * dt_eff
     return t_ps, C_rot
 
 
-# ── Plot & save ───────────────────────────────────────────────────────────────
+# ── Last-frame C_rot ──────────────────────────────────────────────────────────
 
-def save_crot(t_ps, C_rot):
-    fig, ax = plt.subplots()
-    ax.plot(t_ps, C_rot, color=C_CORR,
-            label=r'$C^{\rm rot}_{\rm sim}(t)$')
-    ax.axhline(0, color='black', linewidth=0.6, linestyle=':')
-    ax.set_xlabel(r'$t$ (ps)')
-    ax.set_ylabel(r'$C^{\rm rot}_{\rm sim}(t)$')
-    ax.set_ylim(-0.05, 1.05)
-    ax.legend(loc='best')
-    fig.tight_layout()
-    out = os.path.join(FIG_DIR, '2.corr.pdf')
-    fig.savefig(out, dpi=150)
-    plt.close(fig)
-    print(f'Saved {os.path.relpath(out)}')
+def compute_crot_lastframe(dipoles, max_lag_frames):
+    """
+    Compute C_rot(t) using ONLY the last frame as t_0, going backwards.
+
+    C_rot(lag) = mean over common molecules of  mu(T-1) · mu(T-1-lag)
+
+    Single-origin estimate: fast but noisier. If the final configuration is
+    representative of equilibrium, this should agree with compute_crot.
+    """
+    N      = len(dipoles)
+    t0_idx = N - 1
+    C_rot  = np.zeros(max_lag_frames + 1)
+
+    for lag in range(min(max_lag_frames + 1, N)):
+        t_lag    = t0_idx - lag
+        n_common = min(dipoles[t0_idx].shape[0], dipoles[t_lag].shape[0])
+        d0   = dipoles[t0_idx][:n_common].astype(np.float64)
+        d_lag = dipoles[t_lag][:n_common].astype(np.float64)
+        C_rot[lag] = np.sum(d0 * d_lag, axis=1).mean()
+
+    C_rot /= C_rot[0]
+
+    dt_eff = DT_PS * STRIDE
+    t_ps   = np.arange(max_lag_frames + 1) * dt_eff
+    return t_ps, C_rot
 
 
-def save_csv(t_ps, C_rot):
-    out = os.path.join(FIG_DIR, '2.corr.csv')
+# ── CSV helpers ───────────────────────────────────────────────────────────────
+
+def _shell_tag(label):
+    return (label.replace('$', '').replace('\\', '')
+                 .replace(' ', '').replace(',', '')
+                 .replace('–', '_').replace('-', '_')
+                 .replace('AA', 'A'))
+
+
+def save_csv(label, color, t_ps, C_rot, suffix=''):
+    tag = _shell_tag(label)
+    out = os.path.join(FIG_DIR, f'2.corr{suffix}_{tag}.csv')
     np.savetxt(out,
                np.column_stack([t_ps, C_rot]),
-               header='t_ps C_rot',
+               header=f't_ps C_rot  label="{label}"  color="{color}"',
                comments='# ')
     print(f'Saved {os.path.relpath(out)}')
 
@@ -226,22 +228,38 @@ def save_csv(t_ps, C_rot):
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
-    print(f'Reading: {TRAJ_FILE}')
-    frames  = read_xyz(TRAJ_FILE)
-    print(f'  {len(frames)} frames loaded')
+    dt_eff         = DT_PS * STRIDE
+    max_lag_frames = int(MAX_LAG_PS / dt_eff)
+    print(f'Settings: STRIDE={STRIDE}, dt_eff={dt_eff:.4f} ps, '
+          f'max_lag={max_lag_frames} frames = {MAX_LAG_PS} ps')
+    print('Time averaging: CIRCULAR (periodic) — equal N origins per lag\n')
 
-    print('Building dipole vectors...')
-    dipoles = build_dipoles(frames)
-    n_waters = [d.shape[0] for d in dipoles if d.shape[0] > 0]
-    print(f'  Waters per frame: min={min(n_waters)}  '
-          f'mean={np.mean(n_waters):.0f}  max={max(n_waters)}')
+    for fname, label, color in SHELLS:
+        path = os.path.join(ANA_DIR, fname)
+        if not os.path.exists(path):
+            print(f'[skip] {fname} not found\n')
+            continue
 
-    print('Computing C_rot(t)...')
-    t_ps, C_rot = compute_crot(dipoles)
-    print(f'  Max lag: {t_ps[-1]:.2f} ps  ({len(t_ps)} points)')
-    print(f'  C_rot at t=0:       {C_rot[0]:.4f}  (should be 1.0)')
-    print(f'  C_rot at t_max/2:   {C_rot[len(C_rot)//2]:.4f}')
-    print(f'  C_rot at t_max:     {C_rot[-1]:.4f}')
+        print(f'── {label}  ({fname}) ──')
+        print(f'  Reading (stride={STRIDE})...')
+        frames = read_xyz(path, stride=STRIDE)
+        print(f'  {len(frames)} frames loaded')
 
-    save_crot(t_ps, C_rot)
-    save_csv(t_ps, C_rot)
+        print('  Building dipole vectors...')
+        dipoles = build_dipoles(frames)
+        n_w = [d.shape[0] for d in dipoles]
+        print(f'  Waters/frame: min={min(n_w)}  mean={np.mean(n_w):.0f}  max={max(n_w)}')
+
+        print(f'  Computing C_rot (circular avg, up to {MAX_LAG_PS} ps)...')
+        t_ps, C_rot = compute_crot(dipoles, max_lag_frames)
+        print(f'  C_rot(0)={C_rot[0]:.4f}  '
+              f'C_rot(t=2ps)={C_rot[int(2.0/dt_eff)]:.4f}  '
+              f'C_rot(t={MAX_LAG_PS}ps)={C_rot[-1]:.4f}')
+        save_csv(label, color, t_ps, C_rot, suffix='')
+
+        print('  Computing C_rot (last-frame estimate)...')
+        t_ps_last, C_last = compute_crot_lastframe(dipoles, max_lag_frames)
+        save_csv(label, color, t_ps_last, C_last, suffix='_lastframe')
+        print()
+
+    print('Done. Run corr-plots.py to generate all PDF figures.')
