@@ -1,7 +1,7 @@
 #!/bin/bash
 ## (0) Input files only for the corrected equilibration (290.5 K)
-cp ../Equilibrat_NPT/T=290.5K/NPT.restart.coor .
-cp ../Equilibrat_NPT/T=290.5K/NPT.restart.xsc .
+cp ../Equilibrat_NPT/T2905K/NPT.restart.coor .
+cp ../Equilibrat_NPT/T2905K/NPT.restart.xsc .
 
 #$ -N run_namd
 #$ -pe smp 1

@@ -4,3 +4,7 @@ NVT.dcd
 .DS_Store*
 
 .venv/
+
+trajectory_*.xyz
+
+analysis_code-sm.ipynb
