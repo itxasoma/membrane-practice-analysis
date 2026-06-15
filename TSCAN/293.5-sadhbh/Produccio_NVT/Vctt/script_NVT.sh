@@ -1,32 +1,33 @@
 #!/bin/bash
-#SBATCH --job-name=NVT_sadhbh_2935
-#SBATCH --output=nvt.log
-#SBATCH --error=nvt.err
-#SBATCH --time=24:00:00
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=20
+#$ -N NVT_sadhbh_2935
+#$ -pe smp 1
+#$ -cwd
+#$ -q cerqt03.q
+#$ -o prueba.out
+#$ -e prueba.err
+#$ -m e
+#$ -M YOUR_EMAIL@gmail.com
+#$ -S /bin/bash
 
-# -------------------------------------------------------
-# NVT Production — sadhbh — T = 293.5 K
-#
-# This Vctt folder must contain:
-#   simNVT.conf
-#   NPT.restart.coor   (symlink or copy from ../run_output/)
-#   NPT.restart.vel    (symlink or copy from ../run_output/)
-#   NPT.restart.xsc    (symlink or copy from ../run_output/)
-#   coordenades_inicials.pdb
-#   estructura_membranaDMPC.psf
-#   parametres.prm
-#
-# Copy the restart files from the equilibration run_output:
-#   cp ../Equilibrat_NPT/run_output/NPT.restart.coor .
-#   cp ../Equilibrat_NPT/run_output/NPT.restart.vel  .
-#   cp ../Equilibrat_NPT/run_output/NPT.restart.xsc  .
-#   cp ../Equilibrat_NPT/run_output/coordenades_inicials.pdb .
-#   cp ../Equilibrat_NPT/run_output/parametres.prm .
-#   cp ../../estructura_membranaDMPC.psf . (or from run_output)
-# -------------------------------------------------------
+. /etc/profile
+export OMP_NUM_THREADS=1
+ulimit -s unlimited
 
-module load namd/2025  # adjust to your cluster module name
+module load namd/2025-12-04
 
-namd3 +p${SLURM_CPUS_PER_TASK} simNVT.conf > nvt.log 2>&1
+curr_dir=`pwd`
+
+cp coordenades_inicials.pdb $TMPDIR/
+cp estructura_membranaDMPC.psf $TMPDIR/
+cp parametres.prm $TMPDIR/
+cp simNVT.conf $TMPDIR/
+cp NPT.restart.coor $TMPDIR/
+cp NPT.restart.vel $TMPDIR/
+cp NPT.restart.xsc $TMPDIR/
+
+cd $TMPDIR
+namd3 simNVT.conf > nvt.log
+
+mkdir -p $curr_dir/$JOB_ID
+cp -r * $curr_dir/$JOB_ID/
+cp $curr_dir/$JOB_ID/nvt.log $curr_dir/

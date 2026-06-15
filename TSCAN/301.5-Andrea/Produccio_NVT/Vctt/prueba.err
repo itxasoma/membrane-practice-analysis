@@ -1,2 +1,0 @@
-FATAL ERROR: Cannot specify both an initial temperature and a velocity file
-cp: cannot stat '/home/cmm11/softmatter/namd/membrane-practice-analysis/TSCAN/301.5-Andrea/Produccio_NVT/Vctt/168092/NVT.dcd': No such file or directory
