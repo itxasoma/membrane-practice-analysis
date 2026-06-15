@@ -1,0 +1,6 @@
+# Block-averaged stats, production run
+# log: ../TSCAN/301.5-Andrea/Produccio_NVT/Vctt/168097/nvt.log
+# variable            mean          ±sem  unit    target
+  TEMP            300.6015        0.3282  K       301.5
+  PRESSURE        -47.1386       54.1435  bar     1.01325
+  VOLUME       266765.5277        0.0000  Ang3    266765.5277

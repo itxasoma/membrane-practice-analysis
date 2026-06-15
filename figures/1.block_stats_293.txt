@@ -1,0 +1,6 @@
+# Block-averaged stats, production run
+# log: ../TSCAN/293.5-sadhbh/Produccio_NVT/Vctt/168098/nvt.log
+# variable            mean          ±sem  unit    target
+  TEMP            293.4540        0.3006  K       293.5
+  PRESSURE        -62.6321       57.2193  bar     1.01325
+  VOLUME       263726.8627        0.0000  Ang3    263726.8627

@@ -1,5 +1,6 @@
-# Block-averaged stats, production run
-# log: /Users/itxaso/MASTER-codi/2-SoftMatter/Compressed files for the simulations-20260524/membrane-practice-analysis/src/../0_Simulation/Produccio_NVT/Vctt/nvt.log
+# Block-averaged stats — second half of run
+# log: ../0_Simulation/Produccio_NVT/Vctt/nvt.log
 # variable            mean          ±sem  unit    target
   TEMP            289.1604        0.4057  K       290.5
+  PRESSURE         50.6260       52.5277  bar     1.01325
   VOLUME       263397.4554        0.0000  Ang3    263397.4554
