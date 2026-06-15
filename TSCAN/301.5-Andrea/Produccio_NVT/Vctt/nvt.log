@@ -1,0 +1,33 @@
+Charm++> No provisioning arguments specified. Running with a single PE.
+         Use +auto-provision to fully subscribe resources or +p1 to silence this message.
+Charm++: standalone mode (not using charmrun)
+Charm++> Running in Multicore mode: 1 threads (PEs)
+Charm++> Using recursive bisection (scheme 3) for topology aware partitions
+Converse/Charm++ Commit ID: 
+CharmLB> Load balancer assumes all CPUs are same.
+Charm++> Running on 1 hosts (1 sockets x 20 cores x 2 PUs = 40-way SMP)
+Charm++> cpu topology info is gathered in 0.000 seconds.
+CharmLB> Load balancing instrumentation for communication is off.
+Info: NAMD Git-2025-12-04 for Linux-x86_64-multicore
+Info: 
+Info: Please visit http://www.ks.uiuc.edu/Research/namd/
+Info: for updates, documentation, and support information.
+Info: 
+Info: Please cite Phillips et al., J. Chem. Phys. 153:044130 (2020) doi:10.1063/5.0014475
+Info: in all publications reporting results obtained with NAMD.
+Info: 
+Info: Based on Charm++/Converse 80000 for multicore-linux-x86_64-gcc
+Info: Built Thu Dec 4 09:25:02 CST 2025 by dhardy on athine.ks.uiuc.edu
+Info: Source code at Git commit ID b856a9378ca44bcf5aa708d4b681af4ceb86d8ca
+Info: 1 NAMD  Git-2025-12-04  Linux-x86_64-multicore  1    vivi01  cmm11
+Info: Running on 1 processors, 1 nodes, 1 physical nodes.
+Info: CPU topology information available.
+Info: Charm++/Converse parallel runtime startup completed at 0.00735334 s
+CkLoopLib is used in SMP with simple dynamic scheduling (converse-level notification)
+Info: 25.0547 MB of memory in use based on /proc/self/stat
+Info: Configuration file is simNVT.conf
+Info: Working in the current directory /scratch/168092.1.cerqt03.q
+TCL: Suspending until startup complete.
+Warning: Option "1-4scaling" has been deprecated. Instead use "oneFourScaling".
+FATAL ERROR: Cannot specify both an initial temperature and a velocity file
+[Partition 0][Node 0] End of program

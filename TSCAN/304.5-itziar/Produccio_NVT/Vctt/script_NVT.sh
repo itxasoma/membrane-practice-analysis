@@ -1,32 +1,42 @@
 #!/bin/bash
-#SBATCH --job-name=NVT_itziar_3045
-#SBATCH --output=nvt.log
-#SBATCH --error=nvt.err
-#SBATCH --time=24:00:00
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=20
+## Input files for corrected NVT production (304.5 K)
+cp ../../Equilibrat_NPT/NPT.restart.coor .
+cp ../../Equilibrat_NPT/NPT.restart.vel .
+cp ../../Equilibrat_NPT/NPT.restart.xsc .
+cp ../../Equilibrat_NPT/coordenades_inicials.pdb .
+cp ../../Equilibrat_NPT/estructura_membranaDMPC.psf .
+cp ../../Equilibrat_NPT/parametres.prm .
 
-# -------------------------------------------------------
-# NVT Production — itziar — T = 304.5 K
-#
-# This Vctt folder must contain:
-#   simNVT.conf
-#   NPT.restart.coor   (copy from ../../Equilibrat_NPT/)
-#   NPT.restart.vel    (copy from ../../Equilibrat_NPT/)
-#   NPT.restart.xsc    (copy from ../../Equilibrat_NPT/)
-#   coordenades_inicials.pdb
-#   estructura_membranaDMPC.psf
-#   parametres.prm
-#
-# Copy the restart files:
-#   cp ../../Equilibrat_NPT/NPT.restart.coor .
-#   cp ../../Equilibrat_NPT/NPT.restart.vel  .
-#   cp ../../Equilibrat_NPT/NPT.restart.xsc  .
-#   cp ../../Equilibrat_NPT/coordenades_inicials.pdb .
-#   cp ../../Equilibrat_NPT/parametres.prm .
-#   cp ../../Equilibrat_NPT/estructura_membranaDMPC.psf .
-# -------------------------------------------------------
+#$ -N NVT_itziar_3045
+#$ -pe smp 1
+#$ -cwd
+#$ -q cerqt03.q
+#$ -o prueba.out
+#$ -e prueba.err
+#$ -m e
+#$ -M YOUR_EMAIL@gmail.com
+#$ -S /bin/bash
 
-module load namd/2025  # adjust to your cluster module name
+. /etc/profile
+export OMP_NUM_THREADS=1
+ulimit -s unlimited
 
-namd3 +p${SLURM_CPUS_PER_TASK} simNVT.conf > nvt.log 2>&1
+module load namd/2025-12-04
+
+curr_dir=`pwd`
+
+cp simNVT.conf $TMPDIR/
+cp NPT.restart.coor $TMPDIR/
+cp NPT.restart.vel $TMPDIR/
+cp NPT.restart.xsc $TMPDIR/
+cp coordenades_inicials.pdb $TMPDIR/
+cp estructura_membranaDMPC.psf $TMPDIR/
+cp parametres.prm $TMPDIR/
+
+cd $TMPDIR
+namd3 simNVT.conf > nvt.log
+
+mkdir -p $curr_dir/$JOB_ID
+cp -r * $curr_dir/$JOB_ID/
+cp $curr_dir/$JOB_ID/NVT.dcd $curr_dir/
+cp $curr_dir/$JOB_ID/nvt.log $curr_dir/
