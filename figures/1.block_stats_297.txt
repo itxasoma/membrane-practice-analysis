@@ -1,0 +1,6 @@
+# Block-averaged stats, production run
+# log: ../TSCAN/297.5K-murphy/Produccio_NVT/168113/nvt.log
+# variable            mean          ±sem  unit    target
+  TEMP            296.2914        0.4624  K       297.5
+  PRESSURE       -134.0803       64.1938  bar     1.01325
+  VOLUME       266327.7836        0.0000  Ang3    266327.7836

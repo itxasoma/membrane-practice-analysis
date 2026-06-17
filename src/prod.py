@@ -9,12 +9,13 @@ FIG_DIR  = os.path.join(BASE_DIR, '../figures')
 #LOG_FILE = os.path.join(BASE_DIR, '../0_Simulation/Produccio_NVT/Vctt/nvt.log')
 #LOG_FILE = os.path.join(BASE_DIR, '../TSCAN/304.5-itziar/Produccio_NVT/Vctt/168096/nvt.log')
 #LOG_FILE = os.path.join(BASE_DIR, '../TSCAN/301.5-Andrea/Produccio_NVT/Vctt/168097/nvt.log')
-LOG_FILE = os.path.join(BASE_DIR, '../TSCAN/293.5-sadhbh/Produccio_NVT/Vctt/168098/nvt.log')
+#LOG_FILE = os.path.join(BASE_DIR, '../TSCAN/293.5-sadhbh/Produccio_NVT/Vctt/168098/nvt.log')
+LOG_FILE = os.path.join(BASE_DIR, '../TSCAN/297.5K-murphy/Produccio_NVT/168113/nvt.log')
 
 plt.style.use('lib/science.mplstyle')
 os.makedirs(FIG_DIR, exist_ok=True)
 
-T_TARGET = 293.5   # K
+T_TARGET = 297.5   # K
 P_TARGET = 1.01325 # bar
 BLOCK_COUNTS = [5, 8, 10, 12, 15, 20, 25, 30, 40, 50]
 
@@ -129,39 +130,39 @@ if __name__ == '__main__':
     # ── Plots ────────────────────────────────────────────────────────────────
 
     save_energies(t, data['KINETIC'], data['TOTAL'], data['POTENTIAL'],
-                  os.path.join(FIG_DIR, '1.energies_293.pdf'))
+                  os.path.join(FIG_DIR, '1.energies_297.pdf'))
 
     raw_plot(t, data['TEMP'], C_T, T_TARGET,
              r'Temperature (K)',
-             os.path.join(FIG_DIR, '1.temperature_293.pdf'),
+             os.path.join(FIG_DIR, '1.temperature_297.pdf'),
              rf'$T_{{\rm target}} = {T_TARGET}$ K')
 
     zscore_plot(t, data['TEMP'], C_T, T_TARGET,
                 r'Temperature (K)',
-                os.path.join(FIG_DIR, '1.temperature-zscore_293.pdf'),
+                os.path.join(FIG_DIR, '1.temperature-zscore_297.pdf'),
                 rf'$T_{{\rm target}} = {T_TARGET}$ K')
 
     raw_plot(t, data['VOLUME'], C_V, v0,
              r'Volume ($\mathrm{\AA}^3$)',
-             os.path.join(FIG_DIR, '1.volume_293.pdf'),
+             os.path.join(FIG_DIR, '1.volume_297.pdf'),
              rf'$V_0 = {v0:.1f}\ \mathrm{{\AA}}^3$')
 
     zscore_plot(t, data['PRESSURE'], C_P, P_TARGET,
                 r'Pressure (bar)',
-                os.path.join(FIG_DIR, '1.pressure-zscore_293.pdf'),
+                os.path.join(FIG_DIR, '1.pressure-zscore_297.pdf'),
                 rf'$P_{{\rm target}} = {P_TARGET}$ bar')
 
     raw_plot(t, data['PRESSURE'], C_P, P_TARGET,
              r'Pressure (bar)',
-             os.path.join(FIG_DIR, '1.pressure_293.pdf'),
+             os.path.join(FIG_DIR, '1.pressure_297.pdf'),
              rf'$P_{{\rm target}} = {P_TARGET}$ bar')
 
     # ── Block-averaged uncertainties to txt ───────────────────────────────────
 
     half = len(t) // 2
-    out_txt = os.path.join(FIG_DIR, '1.block_stats_293.txt')
+    out_txt = os.path.join(FIG_DIR, '1.block_stats_297.txt')
     with open(out_txt, 'w') as f:
-        f.write(f'# Block-averaged stats — second half of run\n')
+        f.write(f'# Block-averaged stats, production run\n')
         f.write(f'# log: {LOG_FILE}\n')
         f.write(f'# {"variable":<10}  {"mean":>12}  {"±sem":>12}  {"unit":<6}  target\n')
         for var, unit, target in [

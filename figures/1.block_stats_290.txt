@@ -1,4 +1,4 @@
-# Block-averaged stats — second half of run
+# Block-averaged stats, production run
 # log: ../0_Simulation/Produccio_NVT/Vctt/nvt.log
 # variable            mean          ±sem  unit    target
   TEMP            289.1604        0.4057  K       290.5
