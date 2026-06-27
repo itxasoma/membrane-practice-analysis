@@ -6,7 +6,7 @@ Shell-conditioned ensemble correlation:
     For each lag dt, average over all possible time origins t0.
     For each (t0, t0+dt), correlate only waters present in BOTH frames (by resid).
 
-This version assumes XYZ atom lines have the format:
+Assumes XYZ atom lines have the format:
     resid atomname x y z
 
 Example:
@@ -23,34 +23,36 @@ import numpy as np
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FIG_DIR  = os.path.join(BASE_DIR, '../figures')
-ANA_DIR  = os.path.join(BASE_DIR, '../1_Analysis/Vctt-fast-307.5/')      # target directory
+ANA_DIR  = os.path.join(BASE_DIR, '../1_Analysis/Vctt-fast-307.5/')
 
 os.makedirs(FIG_DIR, exist_ok=True)
 
-# ─── Settings ────────────────────────────────────────────────────────────────
 
 # Timestep between consecutive frames in the trajectory XYZ files (ps).
 # With FRAME_STEP=10, timestep=2fs, DCDfreq=10 --> each XYZ frame = 10×10×2fs = 0.20 ps
 DT_PS = 0.20
 
-# Read every STRIDE-th frame from the XYZ file.
-STRIDE = 1
+STRIDE      = 1
+MAX_LAG_PS  = 10.0
+TEMP_TAG    = "307.5"
 
-# Compute C_rot up to this lag time.
-MAX_LAG_PS = 10.0
-
-# Temperature tag
-TEMP_TAG = "307.5"
-
-# Shell definitions: (xyz filename, legend label, plot color)
 SHELLS = [
-    ('trajectory_d0_3.xyz',   r'$0$-$3\,\AA$',   '#F0A500'),   # orange
-    ('trajectory_d3_5.xyz',   r'$3$-$5\,\AA$',   '#E87D72'),   # red
-    ('trajectory_d5_10.xyz', r'$5$-$10\,\AA$',   '#56A0D3'),   # blue
-    ('trajectory_d10_15.xyz',  r'$10$-$15\,\AA$',  '#845B97'),   # violet
+    ('trajectory_d0_3.xyz',   r'$0$-$3\,\AA$',   '#F0A500'),
+    ('trajectory_d3_5.xyz',   r'$3$-$5\,\AA$',   '#E87D72'),
+    ('trajectory_d5_10.xyz',  r'$5$-$10\,\AA$',  '#56A0D3'),
+    ('trajectory_d10_15.xyz', r'$10$-$15\,\AA$', '#845B97'),
 ]
 
-# ─── XYZ reader ──────────────────────────────────────────────────────────────
+# co-pilot suggestion: add manual tags
+SHELL_TAGS = {
+    r'$0$-$3\,\AA$':   '0_3A',
+    r'$3$-$5\,\AA$':   '3_5A',
+    r'$5$-$10\,\AA$':  '5_10A',
+    r'$10$-$15\,\AA$': '10_15A',
+}
+
+# ---
+
 
 def _parse_frame_header(header):
     header = header.strip()
@@ -97,7 +99,6 @@ def iter_xyz_frames(filename, stride=1):
                 break
 
             if raw_frame_idx % stride != 0:
-                # Fast-forward
                 atoms_read = 0
                 while atoms_read < n_atoms:
                     line = f.readline()
@@ -109,7 +110,6 @@ def iter_xyz_frames(filename, stride=1):
                 raw_frame_idx += 1
                 continue
 
-            # Parse atoms
             atoms = []
             while len(atoms) < n_atoms:
                 line = f.readline()
@@ -125,11 +125,9 @@ def iter_xyz_frames(filename, stride=1):
                 x, y, z = map(float, parts[2:5])
                 atoms.append((resid, atom, x, y, z))
 
-            # Ensure complete triplets
             if len(atoms) % 3 != 0:
                 atoms = atoms[:(len(atoms) // 3) * 3]
 
-            # Build dipole dict  {resid: mu}
             frame = {}
             for i in range(0, len(atoms), 3):
                 r0, a0, x0, y0, z0 = atoms[i]
@@ -165,8 +163,6 @@ def load_dipole_frames(filename, stride=1):
     return indices, frames
 
 
-# ─── Shell-conditioned C_rot ─────────────────────────────────────────────────
-
 def compute_crot_shell_conditioned(frames, max_lag_frames):
     """
     Compute C_rot(t) averaging over all t0 origins.
@@ -178,8 +174,8 @@ def compute_crot_shell_conditioned(frames, max_lag_frames):
     -------
     t_ps       : (n_lags,) float64
     C_rot      : (n_lags,) float64   — NaN where no pairs were found
-    pair_count : (n_lags,) int64     — number of molecule-pairs contributing per lag
-    t0_count   : (n_lags,) int64     — number of t0 origins used per lag
+    pair_count : (n_lags,) int64
+    t0_count   : (n_lags,) int64
     """
     n_frames = len(frames)
     n_lags   = min(max_lag_frames + 1, n_frames)
@@ -217,21 +213,8 @@ def compute_crot_shell_conditioned(frames, max_lag_frames):
     return t_ps, C_rot, pair_count, t0_count
 
 
-# ─── CSV helpers ─────────────────────────────────────────────────────────────
-
-def _shell_tag(label):
-    tag = label
-    tag = tag.replace('$', '')
-    tag = tag.replace('\\,', '')
-    tag = tag.replace('\\AA', 'A')
-    tag = tag.replace('–', '-')
-    tag = tag.replace(' ', '')
-    tag = tag.replace('-', '_')
-    return tag
-
-
 def save_csv(label, color, t_ps, C_rot, pair_count, t0_count):
-    tag = _shell_tag(label)
+    tag = SHELL_TAGS[label]
     out = os.path.join(FIG_DIR, f'2.corr_{tag}_{TEMP_TAG}.csv')
 
     mask = np.isfinite(C_rot)
@@ -250,7 +233,7 @@ def save_csv(label, color, t_ps, C_rot, pair_count, t0_count):
     print(f'  Saved {os.path.relpath(out)}')
 
 
-# ─── Main ────────────────────────────────────────────────────────────────────
+# --- main ---
 
 if __name__ == '__main__':
     dt_eff         = DT_PS * STRIDE
