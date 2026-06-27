@@ -22,3 +22,8 @@ corr:
 corr-plots:
 	mkdir -p ../figures
 	$(PYTHON) corr-plots.py
+
+# computes tau
+stats:
+	mkdir -p ../figures
+	$(PYTHON) stats.py

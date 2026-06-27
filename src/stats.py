@@ -44,7 +44,7 @@ SHELL_LABELS = {
 SHELL_LINESTYLES = ['-', '--', '-.', ':']
 
 
-# ── helpers ───────────────────────────────────────────────────────────────────
+# helpers
 
 def load_csv(path):
     data = np.loadtxt(path, comments='#')
@@ -96,7 +96,7 @@ def fit_tau(t_ps, C_rot, t_min=T_MIN_FIT, t_max=T_MAX_FIT):
         return (np.nan,) * 5
 
 
-# ── main ──────────────────────────────────────────────────────────────────────
+# main
 
 if __name__ == '__main__':
     temps = discover_temps()
@@ -128,7 +128,7 @@ if __name__ == '__main__':
             )
             print(f'  T={temp} K  {SHELL_LABELS[shell_tag]:20s}  {status}')
 
-    # ── save CSV ──────────────────────────────────────────────────────────────
+    # save CSV 
     csv_out = os.path.join(FIG_DIR, '3.tau.csv')
     with open(csv_out, 'w') as fh:
         fh.write('# T_K shell tau_ps tau_err_ps A A_err R2\n')
@@ -137,7 +137,7 @@ if __name__ == '__main__':
                      f'{A:.6f} {A_e:.6f} {R2:.6f}\n')
     print(f'\nSaved {os.path.relpath(csv_out)}')
 
-    # ── plot tau vs T ─────────────────────────────────────────────────────────
+    # plot tau vs T
     shell_data = {s: {'T': [], 'tau': [], 'err': []} for s in SHELL_ORDER}
     for T, shell, tau, tau_e, A, A_e, R2 in rows:
         if np.isfinite(tau) and shell in shell_data:
