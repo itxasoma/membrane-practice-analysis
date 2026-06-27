@@ -22,8 +22,3 @@ corr:
 corr-plots:
 	mkdir -p ../figures
 	$(PYTHON) corr-plots.py
-
-# Other interesting functions (like MSD):
-stats:
-	mkdir -p ../figures
-	$(PYTHON) stats.py
