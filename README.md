@@ -1,12 +1,19 @@
 # Membrane Practice Analysis
 
-Molecular dynamics analysis of a hydrated **DMPC phospholipid membrane** using NAMD, developed for the *Soft Matter* course (2025–2026).
+Molecular dynamics analysis of a hydrated **DMPC phospholipid bilayer** using NAMD,
+developed for the *Soft Matter* course (2025–2026) at Universitat de Barcelona /
+Universitat Politècnica de Catalunya.
 
-The system consists of 128 DMPC (1,2-dimyristoyl-*sn*-glycero-3-phosphocholine) molecules and 4 377 TIP3P water molecules, simulated with the CHARMM36 force field at p = 1 atm. The analysis covers equilibration diagnostics, production thermodynamics across a temperature scan (290–307 K), dipolar rotational autocorrelation functions of water at different distances from the membrane, and translational diffusion via MSD and VACF.
+The system consists of 128 DMPC (1,2-dimyristoyl-*sn*-glycero-3-phosphocholine)
+molecules and 4 377 TIP3P water molecules simulated with the CHARMM36 force field
+at p = 1 atm. The analysis covers equilibration diagnostics, production thermodynamics
+across a temperature scan (290–307 K), and dipolar rotational autocorrelation functions
+(DRACF) of water stratified by distance from the membrane.
 
-***
+---
 
 ## Repository structure
+
 
 ```
 membrane-practice-analysis/
@@ -42,47 +49,18 @@ membrane-practice-analysis/
 
 ## Physical system
 
-A bilayer of 128 DMPC molecules solvated by 4 377 TIP3P water molecules. Simulations use the CHARMM36 lipid force field. The temperature scan covers T = 290, 293, 297, 301, 304, 307 K, spanning the gel–fluid phase transition of DMPC (T<sub>m</sub> ≈ 297 K).
+A bilayer of 128 DMPC molecules solvated by 4 377 TIP3P water molecules.
+Simulations use the CHARMM36 lipid force field. The temperature scan covers
+T = 290.5, 293.5, 297.5, 301.5, 304.5, 307.5 K, spanning the DMPC
+gel–fluid phase transition (T<sub>m</sub> ≈ 297 K).
 
-***
+The equilibration was run in the NPT ensemble (Langevin piston barostat,
+p = 1 atm). Production runs use the NVT ensemble (Langevin thermostat,
+γ = 1 ps⁻¹) at fixed box dimensions from the NPT output.
 
-## Analysis pipeline
-
-### 0 — Equilibration check (`src/equi.py`)
-
-Reads the NAMD `.log` file from the NPT equilibration run and produces time-series and z-score plots for total energy, potential energy, bonded energy, temperature, pressure, and volume. Output is written to `figures/0.*`.
-
-### 1 — Production thermodynamics (`src/prod.py`)
-
-Reads `.log` files from NVT production runs at each temperature and produces energy, temperature, pressure, and volume plots with block-statistics error estimates. Output is written to `figures/1.*`.
-
-### 2 — Dipolar rotational autocorrelation function (`src/corr.py` + `src/corr-plots.py`)
-
-Computes the DRACF for water molecules binned by distance to the nearest lipid atom: 0–3 Å, 3–5 Å, 5–10 Å, 10–15 Å. The dipole vector is defined as
-
-$$\vec{\mu} = \vec{r}_O - \tfrac{1}{2}(\vec{r}_{H_1} + \vec{r}_{H_2})$$
-
-and the correlation function is
-
-$$C_\mathrm{rot}(\delta t) = \frac{\langle\, \vec{\mu}(t) \cdot \vec{\mu}(t + \delta t) \rangle}{\langle\, |\vec{\mu}(t)|^2 \rangle}$$
-
-where the average at each lag $\delta t$ is restricted to water molecules present in both frames (shell-conditioned ensemble). Results are computed for each temperature of the scan and saved as `.csv` + `.pdf` in `figures/2.*`.
-
-The trajectory conversion from binary `.dcd` to `.xyz` format is handled by `1_Analysis/trajectory_to_xyz.py` (reference run) and `1_Analysis/trajectory_to_xyz_tscan.py` (temperature scan), both using VMD's Python interface.
-
-### 3 — Translational diffusion (`src/prod.py`)
-
-Computes the mean squared displacement (MSD) of oxygen atoms, the velocity autocorrelation function (VACF), and the MSD decomposed by distance shell to the membrane. Output in `figures/3a.msd.*`, `figures/3b.vacf.*`, `figures/3c.msd_per_slice.*`.
-
-***
+---
 
 ## Requirements
-
-### NAMD ≥ 2.12
-Required only to re-run simulations. See [NAMD documentation](http://www.ks.uiuc.edu/Research/namd/).
-
-### VMD
-Required for trajectory conversion (`.dcd` → `.xyz`). See [VMD download](https://www.ks.uiuc.edu/Research/vmd/).
 
 ### Python ≥ 3.9
 
@@ -91,48 +69,82 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r src/lib/requirements.txt
 ```
 
-***
+### VMD (for trajectory conversion only)
+Required to convert `.dcd` → `.xyz` via `1_Analysis/trajectory_to_xyz*.py`.
+Tested with VMD 1.9.3. Download at https://www.ks.uiuc.edu/Research/vmd/.
+Run as:
+```bash
+vmd -python -e 1_Analysis/trajectory_to_xyz.py
+```
 
-## How to run the analysis
+### NAMD ≥ 2.12 (to re-run simulations only)
+See https://www.ks.uiuc.edu/Research/namd/.
 
-All analysis scripts assume that `.xyz` trajectory files have already been generated (see `1_Analysis/`). Run from the `src/` directory:
+---
+
+## Analysis pipeline
+
+All scripts must be run from the `src/` directory. `.xyz` trajectory files
+must be generated first (see `1_Analysis/`).
 
 ```bash
 cd src
-
-make equi        # Equilibration diagnostics
-make prod        # Production thermodynamics and diffusion
-make corr        # Compute DRACF for all shells and temperatures
-make corr-plots  # Generate DRACF figures
+make equi        # Step 0 — equilibration diagnostics  → figures/0.*
+make prod        # Step 1 — production thermodynamics  → figures/1.*
+make corr        # Step 2 — compute DRACF               → figures/2.*.csv
+make corr-plots  # Step 2 — plot DRACF                  → figures/2.*.pdf
 ```
 
-Or run scripts directly:
+### Step 0 — Equilibration check (`equi.py`)
+Reads `0_Simulation/Equilibrat_NPT/npt.log` and produces time-series and
+z-score plots for total energy, potential energy, temperature, pressure,
+and volume.
 
-```bash
-python equi.py
-python prod.py
-python corr.py
-python corr-plots.py
-```
+### Step 1 — Production thermodynamics (`prod.py`)
+Reads NVT `.log` files at each temperature and computes block-averaged
+statistics (mean ± SEM via block averaging) for T, P, and V.
 
-Output figures and data are written to `figures/`.
+### Step 2 — Dipolar rotational autocorrelation (`corr.py` + `corr-plots.py`)
+Computes the DRACF for water molecules binned by distance to the nearest
+lipid atom (shells: 0–3, 3–5, 5–10, 10–15 Å). The dipole vector is:
 
-***
+$$\vec{\mu} = \vec{r}_O - \tfrac{1}{2}(\vec{r}_{H_1} + \vec{r}_{H_2})$$
 
-## Notes on the TSCAN folder
+and the normalised autocorrelation at lag δt is:
 
-`TSCAN/` contains `.xyz` trajectory files at T = 293.5, 297.5, 301.5, 304.5, and 307.5 K contributed by collaborators in the course. These are the input for the DRACF and diffusion analyses. The folder naming convention is `<T>-<contributor>`.
+$$C_\mathrm{rot}(\delta t) =
+\frac{\langle\,\hat{\mu}(t) \cdot \hat{\mu}(t+\delta t)\rangle}
+     {\langle\,|\hat{\mu}(t)|^2\rangle}$$
 
-***
+where the average is restricted to water molecules present in both frames
+(shell-conditioned ensemble). Results are saved as `.csv` + `.pdf` in `figures/2.*`.
+
+---
+
+## TSCAN folder conventions
+
+Each subdirectory `TSCAN/<T>-<contributor>/Produccio_NVT/Vctt/` must contain:
+- `trajectory_d0_3.xyz`, `trajectory_d3_5.xyz`, `trajectory_d5_10.xyz`, `trajectory_d10_15.xyz`
+- `nvt.log`
+
+These files are not tracked in git. Contributors share them via [shared storage path].
+
+---
 
 ## References
 
-- J. C. Phillips *et al.*, *J. Comput. Chem.* **26**, 1781 (2005) — NAMD. [DOI:10.1002/jcc.20285](https://doi.org/10.1002/jcc.20285)
-- R. B. Best *et al.*, *J. Chem. Theory Comput.* **8**, 3257 (2012) — CHARMM36 lipid force field. [DOI:10.1021/ct300400x](https://doi.org/10.1021/ct300400x)
-- M. P. Allen and D. J. Tildesley, *Computer Simulations of Liquids*, Oxford Science Publications (2000), Ch. 6.
+- J. C. Phillips *et al.*, *J. Comput. Chem.* **26**, 1781 (2005) — NAMD.
+  [DOI:10.1002/jcc.20285](https://doi.org/10.1002/jcc.20285)
+- R. B. Best *et al.*, *J. Chem. Theory Comput.* **8**, 3257 (2012) — CHARMM36.
+  [DOI:10.1021/ct300400x](https://doi.org/10.1021/ct300400x)
+- S. R. Bhatt & M. Bhide, *J. Chem. Phys.* **125**, 094713 (2006) — DRACF in DMPC.
+  [DOI:10.1063/1.2337289](https://doi.org/10.1063/1.2337289)
+- M. P. Allen & D. J. Tildesley, *Computer Simulations of Liquids*, 2nd ed.,
+  Oxford University Press (2017), Ch. 6.
 
-***
+---
 
 ## Author
 
-**Itxaso Muñoz-Aldalur** — Universitat de Barcelona / Universitat Politècnica de Catalunya, 2025–2026.
+**Itxaso Muñoz-Aldalur** — Universitat de Barcelona / Universitat Politècnica de
+Catalunya, 2025–2026.
