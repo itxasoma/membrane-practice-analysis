@@ -27,14 +27,13 @@ ANA_DIR  = os.path.join(BASE_DIR, '../1_Analysis/Vctt-fast-307.5/')
 
 os.makedirs(FIG_DIR, exist_ok=True)
 
-
 # Timestep between consecutive frames in the trajectory XYZ files (ps).
 # With FRAME_STEP=10, timestep=2fs, DCDfreq=10 --> each XYZ frame = 10×10×2fs = 0.20 ps
 DT_PS = 0.20
 
-STRIDE      = 1
-MAX_LAG_PS  = 10.0
-TEMP_TAG    = "307.5"
+STRIDE     = 1
+MAX_LAG_PS = 10.0
+TEMP_TAG   = "307.5"
 
 SHELLS = [
     ('trajectory_d0_3.xyz',   r'$0$-$3\,\AA$',   '#F0A500'),
@@ -43,7 +42,6 @@ SHELLS = [
     ('trajectory_d10_15.xyz', r'$10$-$15\,\AA$', '#845B97'),
 ]
 
-# co-pilot suggestion: add manual tags
 SHELL_TAGS = {
     r'$0$-$3\,\AA$':   '0_3A',
     r'$3$-$5\,\AA$':   '3_5A',
@@ -51,7 +49,6 @@ SHELL_TAGS = {
     r'$10$-$15\,\AA$': '10_15A',
 }
 
-# ---
 
 
 def _parse_frame_header(header):
@@ -168,14 +165,14 @@ def compute_crot_shell_conditioned(frames, max_lag_frames):
     Compute C_rot(t) averaging over all t0 origins.
 
     For each (t0, t0+dt), only waters present in BOTH frames (by resid) contribute.
-    Normalisation uses denom = sum (mu0·mu0) so C(0) = 1 exactly.
+    Normalisation: denom = sum(mu0·mu0), so C(0) = 1 exactly.
 
     Returns
     -------
     t_ps       : (n_lags,) float64
     C_rot      : (n_lags,) float64   — NaN where no pairs were found
-    pair_count : (n_lags,) int64
-    t0_count   : (n_lags,) int64
+    pair_count : (n_lags,) int64     — diagnostic only, not saved
+    t0_count   : (n_lags,) int64     — diagnostic only, not saved
     """
     n_frames = len(frames)
     n_lags   = min(max_lag_frames + 1, n_frames)
@@ -213,27 +210,20 @@ def compute_crot_shell_conditioned(frames, max_lag_frames):
     return t_ps, C_rot, pair_count, t0_count
 
 
-def save_csv(label, color, t_ps, C_rot, pair_count, t0_count):
-    tag = SHELL_TAGS[label]
-    out = os.path.join(FIG_DIR, f'2.corr_{tag}_{TEMP_TAG}.csv')
+# output 
 
+def save_csv(label, t_ps, C_rot):
+    """Save only t_ps and C_rot — pair/t0 counts are diagnostic, not needed downstream."""
+    tag  = SHELL_TAGS[label]
+    out  = os.path.join(FIG_DIR, f'2.corr_{tag}_{TEMP_TAG}.csv')
     mask = np.isfinite(C_rot)
-    data = np.column_stack([
-        t_ps[mask],
-        C_rot[mask],
-        pair_count[mask],
-        t0_count[mask],
-    ])
-
-    header = (
-        f't_ps C_rot pair_count t0_count '
-        f'label="{label}" color="{color}" temp="{TEMP_TAG}"'
-    )
+    data = np.column_stack([t_ps[mask], C_rot[mask]])
+    header = f't_ps C_rot  label="{label}" temp="{TEMP_TAG}"'
     np.savetxt(out, data, header=header, comments='# ')
     print(f'  Saved {os.path.relpath(out)}')
 
 
-# --- main ---
+# main 
 
 if __name__ == '__main__':
     dt_eff         = DT_PS * STRIDE
@@ -265,14 +255,14 @@ if __name__ == '__main__':
             frames, max_lag_frames
         )
 
-        idx2   = min(len(t_ps) - 1, int(round(2.0  / dt_eff)))
-        idx10  = min(len(t_ps) - 1, int(round(10.0 / dt_eff)))
+        idx2  = min(len(t_ps) - 1, int(round(2.0  / dt_eff)))
+        idx10 = min(len(t_ps) - 1, int(round(10.0 / dt_eff)))
         print(f'  C(0 ps)  = {C_rot[0]:.4f}')
         print(f'  C(2 ps)  = {C_rot[idx2]:.4f}')
         print(f'  C(10 ps) = {C_rot[idx10]:.4f}')
         print(f'  pairs@0  = {pair_count[0]}  |  pairs@end = {pair_count[np.isfinite(C_rot)][-1]}')
 
-        save_csv(label, color, t_ps, C_rot, pair_count, t0_count)
+        save_csv(label, t_ps, C_rot)
         print()
 
     print('Done. Run corr-plots.py to generate figures.')

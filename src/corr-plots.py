@@ -3,16 +3,19 @@
 corr-plots.py — Plot shell-conditioned rotational correlation functions.
 
 Reads:
-    figures/2.corr_<shell>_<TEMP_TAG>.csv
+    figures/2.corr_<shell>_<TEMP_TAG>.csv   (produced by corr.py)
 
 Writes:
-    figures/2.corr_<TEMP_TAG>.pdf        — C_rot(t) for all shells
-    figures/2.corr_pairs_<TEMP_TAG>.pdf  — contributing molecule pairs per lag
+    figures/2.corr.pdf   — C_rot(t) averaged over all shells, one curve per
+                           temperature, coloured with the inferno colourmap.
 """
 
 import os
+import glob
+import re
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FIG_DIR  = os.path.join(BASE_DIR, '../figures')
@@ -22,78 +25,102 @@ plt.style.use('lib/science.mplstyle')
 
 MAX_LAG_PS = 10.0
 
-# ─────────────────────────────────────────────────────────────────────────────
-TEMP_TAG = "307.5"
-# ─────────────────────────────────────────────────────────────────────────────
-
-SHELLS = [
-    (r'$0$-$3\,\AA$',   '0_3A',   '#F0A500'),   # orange
-    (r'$3$-$5\,\AA$',   '3_5A',   '#E87D72'),   # red
-    (r'$5$-$10\,\AA$',  '5_10A',  '#56A0D3'),   # blue
-    (r'$10$-$15\,\AA$', '10_15A', '#845B97'),   # violet
-]
+SHELL_ORDER = ['0_3A', '3_5A', '5_10A', '10_15A']
 
 
 def load_csv(path):
     data = np.loadtxt(path, comments='#')
     if data.ndim == 1:
         data = data[None, :]
-    t_ps       = data[:, 0]
-    C_rot      = data[:, 1]
-    pair_count = data[:, 2]
-    t0_count   = data[:, 3]
-    return t_ps, C_rot, pair_count, t0_count
+    return data[:, 0], data[:, 1]   # t_ps, C_rot
+
+
+def discover_temps():
+    """Return sorted list of temperature tags found in figures/."""
+    pattern = os.path.join(FIG_DIR, '2.corr_0_3A_*.csv')
+    tags = []
+    for p in glob.glob(pattern):
+        m = re.search(r'2\.corr_0_3A_(.+)\.csv$', os.path.basename(p))
+        if m:
+            tags.append(m.group(1))
+    return sorted(tags, key=lambda s: float(s))
+
+
+def average_shells(temp):
+    """
+    Load all available shells for a given temperature tag and return
+    their point-wise average on a common t_ps grid.
+
+    Returns (t_ps, C_avg) or (None, None) if no shells are found.
+    """
+    curves = []
+    t_ref  = None
+
+    for shell_tag in SHELL_ORDER:
+        path = os.path.join(FIG_DIR, f'2.corr_{shell_tag}_{temp}.csv')
+        if not os.path.exists(path):
+            print(f'  [skip] {os.path.basename(path)}')
+            continue
+
+        t_ps, C_rot = load_csv(path)
+
+        # Restrict to MAX_LAG_PS
+        mask = t_ps <= MAX_LAG_PS
+        t_ps  = t_ps[mask]
+        C_rot = C_rot[mask]
+
+        if t_ref is None:
+            t_ref = t_ps
+        else:
+            # Interpolate onto the reference grid if lengths differ
+            if len(t_ps) != len(t_ref):
+                C_rot = np.interp(t_ref, t_ps, C_rot)
+
+        curves.append(C_rot)
+        print(f'  Loaded {os.path.basename(path)}')
+
+    if not curves:
+        return None, None
+
+    C_avg = np.mean(curves, axis=0)
+    return t_ref, C_avg
 
 
 if __name__ == '__main__':
-    fig1, ax1 = plt.subplots()
-    fig2, ax2 = plt.subplots()
+    temps = discover_temps()
+    if not temps:
+        print(f'No CSV files found in {FIG_DIR}.')
+        print('Run corr.py for each temperature first.')
+        raise SystemExit(1)
 
-    any_loaded = False
+    print(f'Temperatures found: {temps}')
 
-    for label, tag, color in SHELLS:
-        path = os.path.join(FIG_DIR, f'2.corr_{tag}_{TEMP_TAG}.csv')
-        if not os.path.exists(path):
-            print(f'[skip] {os.path.basename(path)} not found')
+    # Inferno colours: sample from [0.15, 0.85] to avoid near-black/near-white ends.
+    n_temps = len(temps)
+    sample_points = np.linspace(0.15, 0.85, n_temps)
+    inferno = cm.get_cmap('inferno')
+    temp_colors = {t: inferno(s) for t, s in zip(temps, sample_points)}
+
+    fig, ax = plt.subplots()
+
+    for temp in temps:
+        print(f'\nT = {temp} K')
+        t_ps, C_avg = average_shells(temp)
+        if t_ps is None:
+            print(f'  No data for T = {temp} K, skipping.')
             continue
 
-        t_ps, C_rot, pair_count, t0_count = load_csv(path)
-        any_loaded = True
+        color = temp_colors[temp]
+        ax.plot(t_ps, C_avg, color=color, lw=1.6, label=f'$T = {temp}$ K')
 
-        plt.rcParams['lines.markersize'] = 0.3
-        ax1.plot(t_ps, C_rot, color=color, lw=2, label=label)
-        ax2.plot(t_ps, pair_count, color=color, lw=2, label=label)
+    ax.set_xlabel(r'$t$ (ps)')
+    ax.set_ylabel(r'$C^{\rm rot}(t)$')
+    ax.set_xlim(0, MAX_LAG_PS)
+    ax.set_ylim(0, 1.0)
+    ax.legend(title='Temperature', loc='upper right', framealpha=0.9)
 
-        print(f'Loaded {os.path.basename(path)}  '
-              f'(C(0)={C_rot[0]:.3f}, C(end)={C_rot[-1]:.3f})')
-
-    if not any_loaded:
-        print('\nNo CSV files found. Check that:')
-        print(f'  1. corr.py has been run with TEMP_TAG = "{TEMP_TAG}"')
-        print(f'  2. The CSVs are in {FIG_DIR}')
-        print(f'  3. This script uses the same TEMP_TAG = "{TEMP_TAG}"')
-    else:
-        ax1.set_xlabel(r'$t$ (ps)')
-        ax1.set_ylabel(r'$C^{\rm rot}(t)$')
-        ax1.set_xlim(0, MAX_LAG_PS)
-        ax1.set_ylim(0, 1.0)
-        ax1.set_title(f'Rotational correlation for T = {TEMP_TAG} K')
-        ax1.legend(loc='upper right')
-        fig1.tight_layout()
-
-        out1 = os.path.join(FIG_DIR, f'2.corr_{TEMP_TAG}.pdf')
-        fig1.savefig(out1, dpi=150)
-        plt.close(fig1)
-        print(f'\nSaved {os.path.relpath(out1)}')
-
-        ax2.set_xlabel(r'$t$ (ps)')
-        ax2.set_ylabel('Contributing molecule pairs')
-        ax2.set_xlim(0, MAX_LAG_PS)
-        ax2.set_title(f'Shell population — T = {TEMP_TAG} K')
-        ax2.legend(loc='upper right')
-        fig2.tight_layout()
-
-        out2 = os.path.join(FIG_DIR, f'2.corr_pairs_{TEMP_TAG}.pdf')
-        fig2.savefig(out2, dpi=150)
-        plt.close(fig2)
-        print(f'Saved {os.path.relpath(out2)}')
+    fig.tight_layout()
+    out = os.path.join(FIG_DIR, '2.corr.pdf')
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    print(f'\nSaved {os.path.relpath(out)}')
